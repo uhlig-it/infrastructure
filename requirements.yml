@@ -10,6 +10,8 @@ collections:
   - name: thorian93.main
   - name: ansible.posix
   - name: community.crypto
+  - name: community.docker
+  - name: community.general
   - name: community.postgresql
   # Dependency of suhlig.foundation.minimal (unattended_upgrades).
   - name: hifis.toolkit
