@@ -6,6 +6,8 @@
 - name: Deploy Concourse databases
   hosts: databases
   become: true
+  collections:
+    - community.postgresql
   pre_tasks:
     - name: Required apt packages are installed
       ansible.builtin.apt:
