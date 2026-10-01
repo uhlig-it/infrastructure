@@ -10,9 +10,8 @@ name: Deploy
 #       service: mqtt-router
 #     secrets: inherit
 #
-# The caller must define the `vault_password` and `infra_token` secrets. The SSH
-# deploy key is read from the vault (`github.ssh_key`), so no separate `ssh_key`
-# secret is needed. `infra_token` must be able to read this (private) repository.
+# The caller must define the `vault_password` secret. The SSH deploy key is read
+# from the vault (`github.ssh_key`), so no separate `ssh_key` secret is needed.
 on:
   workflow_call:
     inputs:
@@ -28,9 +27,6 @@ on:
     secrets:
       vault_password:
         description: Ansible vault password
-        required: true
-      infra_token:
-        description: Token with read access to this (private) repository
         required: true
 
 jobs:
@@ -49,7 +45,6 @@ jobs:
           repository: uhlig-it/infrastructure
           ref: ${{ inputs.ref }}
           path: infrastructure
-          token: ${{ secrets.infra_token }}
       - name: Set up Go
         # Only needed by services whose playbook builds from source.
         if: ${{ hashFiles('app/go.mod') != '' }}

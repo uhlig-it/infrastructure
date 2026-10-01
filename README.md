@@ -6,21 +6,17 @@ See `plan.md` in the workspace root for the full evaluation and rationale.
 
 ## Required CI secrets
 
-Every app repo that calls the reusable deploy workflow must define two secrets. Set them once at the org level, visible to the calling repos:
+Every app repo that calls the reusable deploy workflow must define one secret. Set it once at the org level, visible to the calling repos:
 
 | Secret | What it is | How to get it |
 | --- | --- | --- |
 | `VAULT_PASSWORD` | The ansible-vault password | The password for `$ANSIBLE_VAULT_PASSWORD_FILE` |
-| `INFRA_TOKEN` | A token that can read this (private) repo | A fine-grained PAT: resource owner `uhlig-it`, repository access `uhlig-it/infrastructure`, permission **Contents: Read-only** |
 
 ```command
 $ gh secret set vault_password --org uhlig-it --visibility selected --repos <repos> < ~/.ansible-vault-password
-$ gh secret set infra_token --org uhlig-it --visibility selected --repos <repos>
 ```
 
-`INFRA_TOKEN` is required because the workflow checks out this private repo from the calling repo, and the caller's `GITHUB_TOKEN` cannot read another private repo.
-
-> **Fine-grained PATs expire.** When a deploy job fails at the "Check out the infrastructure repo" step, the token has lapsed — generate a new one and re-run `gh secret set infra_token`.
+This repo is public, so the workflow can check it out from the calling repo with the default `GITHUB_TOKEN` — no extra token is needed. (A reusable workflow in a *private* repo cannot be called from another repo at all, which is why this one is public.)
 
 ## Layout
 
@@ -65,7 +61,7 @@ In CI, the reusable deploy workflow writes the `vault_password` secret to a file
 How Ansible reaches the hosts depends on where it runs:
 
 - **From your workstation:** nothing to configure. Ansible uses your SSH agent and `~/.ssh/config`, exactly as `ssh <host>` would. No key is stored in this repo.
-- **From GitHub Actions:** the runner has no key, so the reusable deploy workflow decrypts the vault and writes `github.ssh_key` to `~/.ssh/id_rsa`. The app repos pass `vault_password` and `infra_token` through with `secrets: inherit`; see [Required CI secrets](#required-ci-secrets).
+- **From GitHub Actions:** the runner has no key, so the reusable deploy workflow decrypts the vault and writes `github.ssh_key` to `~/.ssh/id_rsa`. The app repos pass `vault_password` through with `secrets: inherit`; see [Required CI secrets](#required-ci-secrets).
 - **From Concourse:** the pipelines pass `((github.ssh_key))` from the vault to `lib/tasks/ssh/identity.yml`, which writes it to `ssh-config/id`.
 
 It is the same key everywhere: one deploy key whose public half is in each host's `~/.ssh/authorized_keys`. It is currently stored in the vault as `github.ssh_key` and is also used to clone the repos — a dedicated deploy key would be cleaner, but the material is identical, which is why a workstation deploy needs no extra setup.
