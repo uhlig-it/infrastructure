@@ -6,15 +6,19 @@ See `plan.md` in the workspace root for the full evaluation and rationale.
 
 ## Required CI secrets
 
-Every app repo that calls the reusable deploy workflow must define one secret. Set it once at the org level, visible to the calling repos:
+Every app repo that calls the reusable deploy workflow must define two secrets. Set them once at the org level, visible to the calling repos:
 
 | Secret | What it is | How to get it |
 | --- | --- | --- |
 | `VAULT_PASSWORD` | The ansible-vault password | The password for `$ANSIBLE_VAULT_PASSWORD_FILE` |
+| `TAILSCALE_AUTHKEY` | Lets the runner join the tailnet | A Tailscale auth key (admin console → Settings → Keys), or an OAuth client |
 
 ```command
 $ gh secret set vault_password --org uhlig-it --visibility selected --repos <repos> < ~/.ansible-vault-password
+$ gh secret set tailscale_authkey --org uhlig-it --visibility selected --repos <repos>
 ```
+
+`TAILSCALE_AUTHKEY` is needed because the inventory uses MagicDNS names (`opus`, `shop`, …), which only resolve inside the tailnet.
 
 This repo is public, so the workflow can check it out from the calling repo with the default `GITHUB_TOKEN` — no extra token is needed. (A reusable workflow in a *private* repo cannot be called from another repo at all, which is why this one is public.)
 
