@@ -17,7 +17,9 @@ jobs:
           python3 -m venv /tmp/ansible
           /tmp/ansible/bin/pip install ansible-core
       - name: Install collections and roles
-        run: /tmp/ansible/bin/ansible-galaxy install -r requirements.yml
+        run: |
+          /tmp/ansible/bin/ansible-galaxy collection install -r requirements.yml
+          /tmp/ansible/bin/ansible-galaxy role install -r requirements.yml
       - name: Syntax check every playbook
         # site.yml is a pure import list.
         run: |

@@ -60,7 +60,9 @@ jobs:
           /tmp/ansible/bin/pip install ansible-core
       - name: Install collections and roles
         working-directory: infrastructure
-        run: /tmp/ansible/bin/ansible-galaxy install -r requirements.yml
+        run: |
+          /tmp/ansible/bin/ansible-galaxy collection install -r requirements.yml
+          /tmp/ansible/bin/ansible-galaxy role install -r requirements.yml
       - name: Write the vault password
         run: printf '%s\n' "${{ secrets.vault_password }}" > "${{ github.workspace }}/.vault-password"
       - name: Extract the SSH deploy key from the vault
