@@ -21,10 +21,11 @@ jobs:
           /tmp/ansible/bin/ansible-galaxy collection install -r requirements.yml
           /tmp/ansible/bin/ansible-galaxy role install -r requirements.yml
       - name: Syntax check every playbook
-        # site.yml is a pure import list.
+        # site.yml is a pure import list; playbooks/services/files/ holds
+        # config files, not playbooks.
         run: |
           set -e
-          for pb in $(find playbooks -name '*.yml' ! -name 'site.yml'); do
+          for pb in $(find playbooks -name '*.yml' ! -name 'site.yml' ! -path 'playbooks/services/files/*'); do
             echo "== $pb"
             /tmp/ansible/bin/ansible-playbook --syntax-check "$pb"
           done
