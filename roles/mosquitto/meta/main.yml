@@ -1,0 +1,16 @@
+galaxy_info:
+  description: Run the Mosquitto MQTT broker container
+  author: Steffen Uhlig
+  license: MIT
+  min_ansible_version: "2.9"
+  platforms:
+    - name: Debian
+      versions: [all]
+    - name: Ubuntu
+      versions: [all]
+  galaxy_tags: []
+
+dependencies: []
+
+collections:
+  - community.docker
