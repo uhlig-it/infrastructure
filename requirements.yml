@@ -3,7 +3,6 @@
 # Install with: ansible-galaxy install -r requirements.yml
 collections:
   - name: suhlig.foundation
-  - name: artis3n.tailscale
   - name: thorian93.main
   - name: ansible.posix
   - name: community.crypto
@@ -11,6 +10,7 @@ collections:
     version: ">=0.30.1,<3.0.0"
 
 roles:
+  - src: artis3n.tailscale
   - src: https://github.com/uhlig-it/ansible-role-simple-systemd-service
     name: uhlig-it.simple_systemd_service
     version: master
