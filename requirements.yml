@@ -1,0 +1,48 @@
+---
+# Every collection and role used anywhere in this repo.
+# Install with: ansible-galaxy install -r requirements.yml
+collections:
+  - name: suhlig.foundation
+  - name: artis3n.tailscale
+  - name: thorian93.main
+  - name: ansible.posix
+  - name: community.crypto
+  - name: prometheus.prometheus
+    version: ">=0.30.1,<3.0.0"
+
+roles:
+  - src: https://github.com/uhlig-it/ansible-role-simple-systemd-service
+    name: uhlig-it.simple_systemd_service
+    version: master
+  - src: https://github.com/uhlig-it/ansible-role-duckdns
+    name: uhlig-it.duckdns
+    version: master
+  - src: https://github.com/uhlig-it/ansible-role-sqlite-backup-b2
+    name: uhlig-it.sqlite_backup_b2
+    version: main
+  - src: https://github.com/uhlig-it/ansible-role-home-assistant-backup-b2
+    name: uhlig-it.home-assistant-backup-b2
+    version: main
+  - src: https://github.com/uhlig-it/ansible-role-mosquitto-bridge
+    name: uhlig-it.ansible-role-mosquitto-bridge
+    version: master
+  - src: https://github.com/suhlig/ansible-role-caddy
+    name: suhlig.caddy
+    version: master
+  - src: https://github.com/suhlig/ansible-role-caddy_reverse_proxy
+    name: suhlig.caddy_reverse_proxy
+    version: master
+  - src: https://github.com/suhlig/ansible-role-caddy_file_server
+    name: suhlig.caddy_file_server
+    version: master
+  - src: ansistrano.deploy
+  - src: nerab.ruby
+  - src: geerlingguy.docker
+  - src: gantsign.golang
+  - src: ANXS.postgresql
+    version: v1.17.0
+  # Fork of troykinsella.concourse with the removed `include` action fixed.
+  # Not published to Galaxy; installed straight from git.
+  - src: https://github.com/suhlig/ansible-concourse
+    name: suhlig.concourse
+    version: master

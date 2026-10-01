@@ -1,0 +1,38 @@
+---
+# Fleet-wide Tailscale configuration: the single source of truth for node
+# tags, subnet routes, the exit node, and Tailscale Services.
+# Per-host arguments live in inventory/host_vars/<host>.yml.
+- name: Configure Tailscale
+  hosts: all
+  roles:
+    - role: artis3n.tailscale
+      become: true
+
+- name: Enable IP forwarding on exit nodes
+  hosts: exit_nodes
+  tasks:
+    - name: Enable IPv4 forwarding
+      ansible.posix.sysctl:
+        name: net.ipv4.ip_forward
+        value: "1"
+        sysctl_set: true
+        state: present
+        reload: true
+      become: true
+      tags: [debug]
+
+- name: Publish Tailscale Services
+  hosts: all
+  become: true
+  tasks:
+    - name: Publish each Tailscale Service
+      ansible.builtin.include_role:
+        name: suhlig.foundation.tailscale_service
+      vars:
+        tailscale_service_name: "{{ item.name }}"
+        tailscale_service_port: "{{ item.port }}"
+        tailscale_service_backend: "{{ item.backend }}"
+      loop: "{{ tailscale_services | default([]) }}"
+      loop_control:
+        label: "{{ item.name }}"
+      tags: [tailscale, service]

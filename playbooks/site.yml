@@ -1,0 +1,32 @@
+---
+# Runs the whole fleet: fleet concerns, then machines, then services.
+# During migration, prefer running the narrower playbooks individually.
+- import_playbook: fleet/tailscale.yml
+- import_playbook: fleet/metrics.yml
+
+- import_playbook: machines/pi5.yml
+- import_playbook: machines/pi0.yml
+- import_playbook: machines/kunakam.yml
+- import_playbook: machines/fortress.yml
+- import_playbook: machines/opus.yml
+- import_playbook: machines/pascal.yml
+- import_playbook: machines/shop.yml
+- import_playbook: machines/wordclock.yml
+- import_playbook: machines/neon.yml
+
+- import_playbook: services/kehrkraft.yml
+- import_playbook: services/gotosocial.yml
+- import_playbook: services/concourse.yml
+- import_playbook: services/mosquitto-exporter.yml
+- import_playbook: services/mqtt-router.yml
+- import_playbook: services/mqtt-blink1.yml
+- import_playbook: services/mqtt-gpio-binary-sensor.yml
+- import_playbook: services/env-sensors.yml
+- import_playbook: services/tasmota-firmware-proxy.yml
+- import_playbook: services/speedtest-exporter.yml
+- import_playbook: services/shorts.yml
+- import_playbook: services/youtube-likes-feed.yml
+- import_playbook: services/www.yml
+- import_playbook: services/speisehof.yml
+- import_playbook: services/nowak-reisen.yml
+- import_playbook: services/meal-tracker.yml

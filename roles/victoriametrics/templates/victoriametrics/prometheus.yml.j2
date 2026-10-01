@@ -1,0 +1,71 @@
+# VictoriaMetrics scrape configuration (Prometheus-compatible).
+# Changes are picked up automatically (see -promscrape.configCheckInterval).
+global:
+  scrape_interval: {{ victoriametrics_scrape_interval }}
+  scrape_timeout: 10s
+
+scrape_configs:
+  # Node exporters and host-exposed Prometheus endpoints.
+  # All of these share the node exporter basic auth credentials.
+  - job_name: node
+    basic_auth:
+      username: prometheus
+      password: {{ victoriametrics_node_exporter_password | to_json }}
+    static_configs:
+      - targets:
+          - shop:9100       # node exporter
+          - soda:9100       # node exporter
+          - neon:9100       # node exporter
+          - wordclock:9100  # node exporter
+          - opus:9100       # node exporter
+          - hansahaus:9100  # node exporter
+          - fortcarsta:9100 # node exporter
+          - pascal:9100     # node exporter
+          - opus:9104       # speedtest
+          - hansahaus:9104  # speedtest
+          - fortcarsta:9104 # speedtest
+          - shop:9103       # env-sensors
+          - wordclock:9103  # env-sensors
+
+  - job_name: gotosocial
+    scheme: https
+    basic_auth:
+      username: prometheus
+      password: {{ victoriametrics_gotosocial_password | to_json }}
+    static_configs:
+      - targets: [ uhlig.social ]
+
+  - job_name: OpenDTU
+    metrics_path: /api/prometheus/metrics
+    static_configs:
+      - targets: [ 192.168.10.14 ]
+
+  - job_name: Watchtower
+    metrics_path: /v1/metrics
+    bearer_token: {{ victoriametrics_watchtower_token | to_json }}
+    static_configs:
+      - targets: [ opus:8380 ]
+
+  - job_name: gosund
+    basic_auth:
+      username: admin
+      password: {{ victoriametrics_gosund_password | to_json }}
+    static_configs:
+      - targets:
+          - 192.168.1.10   # gosund-0
+          - 192.168.1.11   # gosund-1
+          - 192.168.1.12   # gosund-2
+          - 192.168.10.170 # gosund-3
+
+  - job_name: nousA8T
+    basic_auth:
+      username: admin
+      password: {{ victoriametrics_gosund_password | to_json }}
+    static_configs:
+      - targets:
+          - 192.168.10.5  # nousA8T-0
+          - 192.168.10.6  # nousA8T-1
+          - 192.168.10.7  # nousA8T-2
+          - 192.168.10.8  # nousA8T-3
+          - 192.168.10.9  # nousA8T-4
+          - 192.168.10.10 # nousA8T-5

@@ -1,0 +1,23 @@
+- name: Unifi directory exists
+  ansible.builtin.file:
+    path: /opt/unifi
+    state: directory
+    owner: suhlig
+    group: suhlig
+  become: true
+  tags: [ docker, unifi, directory ]
+- name: Unifi is running
+  community.docker.docker_container:
+    name: unifi
+    image: docker.io/jacobalberty/unifi
+    pull: true
+    state: started
+    detach: true
+    restart: true
+    restart_policy: always
+    env: { TZ: Europe/Berlin }
+    network_mode: host
+    volumes: [ /opt/unifi:/unifi ]
+    user: unifi
+    groups: unifi
+  tags: [ docker, container, unifi ]

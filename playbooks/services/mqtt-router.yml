@@ -1,0 +1,50 @@
+---
+# Source: github.com/uhlig-it/mqtt-router
+# Builds the binary from the app checkout (app_source) on the controller.
+- name: Deploy the mqtt router
+  hosts: opus
+  become: true
+  gather_facts: false
+  pre_tasks:
+    - name: Program snapshot is up to date
+      ansible.builtin.command:
+        cmd: goreleaser --snapshot --clean
+        chdir: "{{ app_source }}"
+      delegate_to: localhost
+      become: false
+    - name: Path to binary is set from artifacts.json
+      ansible.builtin.set_fact:
+        binary_path: "{{ item['path'] }}"
+      when: >-
+        item['goos'] is defined and item['goos'] == 'linux'
+        and item['goarch'] is defined and item['goarch'] == 'amd64'
+        and item['type'] is defined and item['type'] == 'Binary'
+      loop: "{{ lookup('file', app_source + '/dist/artifacts.json') | from_json }}"
+      tags: [kiosk, goreleaser, binary, path, artifacts]
+  tasks:
+    - name: MQTT routes file is present
+      ansible.builtin.copy:
+        src: "{{ playbook_dir }}/files/mqtt-router.yml"
+        dest: /etc/mqtt-router.yml
+        mode: "0644"
+      tags: [mqtt, router, config]
+      notify: restart
+  roles:
+    - role: uhlig-it.simple_systemd_service
+      vars:
+        program:
+          binary: "{{ app_source }}/{{ binary_path }}"
+          name: mqtt-router
+          runtime_user: mqtt-router
+          parameters:
+            - -mqtt-url "{{ mqtt_router_mqtt_url }}"
+            - -routes /etc/mqtt-router.yml
+            - -verbose
+          description: mqtt-router
+      become: true
+      tags: [systemd, service]
+  handlers:
+    - name: restart
+      ansible.builtin.service:
+        name: mqtt-router
+        state: restarted

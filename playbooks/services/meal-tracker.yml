@@ -1,0 +1,59 @@
+---
+# Source: github.com/suhlig/meal-tracker
+# CURRENTLY DEPLOYED NOWHERE — needs resurrection.
+# The inventory repo marks mealtracker as defunct and the old host (wg) is retired.
+# TODO: pick a host, then migrate secrets (mealtracker.*, postmark.api_token).
+# TODO: CI must pass app_source (path to the meal-tracker checkout).
+- name: mealtracker
+  hosts: unassigned
+  gather_facts: false
+  become: false
+  vars:
+    mealtracker_deployed_to: "/opt/{{ ansible_play_name }}"
+  pre_tasks:
+    - name: Dependencies are installed
+      ansible.builtin.apt:
+        name:
+          - libsqlite3-dev
+      become: true
+      tags: [apt, sqlite]
+  roles:
+    - role: nerab.ruby
+      vars:
+        ruby_version:
+          major: 3
+          minor: 1
+          teeny: 2
+      become: true
+      tags: [ruby]
+    - role: ansistrano.deploy
+      vars:
+        ansistrano_deploy_from: "{{ app_source }}"
+        ansistrano_deploy_to: "{{ mealtracker_deployed_to }}"
+        ansistrano_current_via: symlink
+        ansistrano_deploy_via: rsync
+        ansistrano_shared_paths:
+          - log
+          - tmp
+        ansistrano_keep_releases: 5
+        ansistrano_before_setup_tasks_file: "{{ infrastructure_root }}/roles/rails-puma/ansistrano-callbacks/before_setup.yml"
+        ansistrano_after_symlink_tasks_file: "{{ infrastructure_root }}/roles/rails-puma/ansistrano-callbacks/after_symlink.yml"
+      tags: [deploy, capistrano, ansistrano]
+    - role: rails-puma
+      tags: [puma, ruby, service]
+    - role: uhlig-it.sqlite_backup_b2
+      vars:
+        sqlite_backup_b2_database_path: "{{ mealtracker_deployed_to }}/shared/production.sqlite3"
+        sqlite_backup_b2_bucket: suhlig-mealtracker-backup
+        sqlite_backup_b2_keyId: "{{ mealtracker.backup.keyId }}"
+        sqlite_backup_b2_applicationKey: "{{ mealtracker.backup.applicationKey }}"
+        sqlite_backup_b2_runtime_user: suhlig
+        sqlite_backup_b2_runtime_group: suhlig
+      become: true
+      tags: [sqlite, backup, service, timer]
+    - role: suhlig.caddy_reverse_proxy
+      become: true
+      vars:
+        caddy_domain: "{{ mealtracker.fqdn }}"
+        caddy_port: "{{ mealtracker.port }}"
+      tags: [mealtracker, rails, puma, caddy, proxy]

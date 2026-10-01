@@ -1,0 +1,51 @@
+---
+# VictoriaMetrics on soda plus Prometheus node exporters across the fleet.
+# Source: github.com/uhlig-it/metrics
+# TODO: migrate the local `victoriametrics` role into roles/victoriametrics/.
+- name: Deploy VictoriaMetrics
+  hosts: victoriametrics
+  become: true
+  gather_facts: true
+  tasks:
+    - name: Limit the journal size
+      ansible.builtin.lineinfile:
+        dest: /etc/systemd/journald.conf
+        regexp: "^.*{{ item.name }}="
+        line: "{{ item.name }}={{ item.value }}"
+        backup: true
+      loop:
+        # Hard cap on journal size (journald's default is 10% of the disk,
+        # up to 4G). SystemKeepFree alone does not limit the journal.
+        - name: SystemMaxUse
+          value: 1G
+        - name: SystemKeepFree
+          value: 2G
+        - name: MaxRetentionSec
+          value: 2week
+      notify: restart journald
+      tags: [systemd, journald]
+  handlers:
+    - name: restart journald
+      ansible.builtin.service:
+        name: systemd-journald
+        state: restarted
+  roles:
+    - role: victoriametrics
+    - role: suhlig.foundation.tailscale_service
+      vars:
+        tailscale_service_name: "{{ victoriametrics_tailscale_service_name }}"
+        tailscale_service_port: "{{ victoriametrics_tailscale_service_port }}"
+        tailscale_service_backend: "http://{{ victoriametrics_http_listen_addr }}"
+      when: victoriametrics_tailscale_service
+      tags: [tailscale]
+
+- name: Deploy Prometheus Node Exporter
+  hosts: nodeexporters
+  become: true
+  gather_facts: true
+  roles:
+    - role: prometheus.prometheus.node_exporter
+      vars:
+        node_exporter_basic_auth_users:
+          prometheus: "{{ node_exporter_password }}"
+  tags: [node-exporter]

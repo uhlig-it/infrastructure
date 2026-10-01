@@ -1,0 +1,21 @@
+- name: System group for config file access exists
+  group:
+    name: victoriametrics
+    system: true
+  tags: [ victoriametrics ]
+
+- name: Configuration directories exist
+  file:
+    path: "{{ item }}"
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+  loop:
+    - "{{ victoriametrics_config_dir }}"
+    - "{{ victoriametrics_dashboards_dir }}"
+  tags: [ victoriametrics ]
+
+- name: VictoriaMetrics is deployed
+  include_tasks: victoriametrics.yml
+  tags: [ victoriametrics ]

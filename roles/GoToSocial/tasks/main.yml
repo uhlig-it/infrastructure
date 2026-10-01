@@ -1,0 +1,133 @@
+- name: Runtime group exists
+  ansible.builtin.group:
+    name: "{{ gts_runtime_user }}"
+    state: present
+
+- name: Runtime user exists
+  ansible.builtin.user:
+    name: "{{ gts_runtime_user }}"
+    group: "{{ gts_runtime_user }}"
+    state: present
+    system: true
+  tags: os, system, user, group
+
+- name: Program directory exists
+  ansible.builtin.file:
+    path: "{{ gts_bin_directory }}"
+    state: directory
+    mode: "0775"
+    owner: "{{ gts_runtime_user }}"
+    group: "{{ gts_runtime_group }}"
+  tags: os, system, directory, binary
+
+- name: Fetch binary
+  ansible.builtin.unarchive:
+    src: https://codeberg.org/superseriousbusiness/gotosocial/releases/download/v{{ gts_version }}/gotosocial_{{ gts_version }}_linux_amd64.tar.gz
+    dest: "{{ gts_bin_directory }}"
+    remote_src: yes
+    owner: "{{ gts_runtime_user }}"
+    group: "{{ gts_runtime_group }}"
+  tags: binary, http, get, fetch
+
+- name: Runtime path exists
+  ansible.builtin.file:
+    path: "{{ gts_runtime_directory }}"
+    state: directory
+    mode: "0775"
+    owner: "{{ gts_runtime_user }}"
+    group: "{{ gts_runtime_group }}"
+  tags: os, system, directory, runtime
+
+- name: SQLite tools are installed
+  ansible.builtin.apt:
+    name: sqlite3
+    update_cache: yes
+  tags: database, sql, sqlite, apt
+
+- name: Database exists
+  ansible.builtin.command: sqlite3 "{{ gts_db_path }}" .databases
+  args:
+    creates: "{{ gts_db_path }}"
+  tags: database, sql, sqlite
+
+- name: Database belongs to the runtime user
+  ansible.builtin.file:
+    path: "{{ gts_db_path }}"
+    mode: "0755"
+    owner: "{{ gts_runtime_user }}"
+    group: "{{ gts_runtime_group }}"
+  tags: database, sql, sqlite, owner, user
+
+- name: Config file is rendered
+  ansible.builtin.template:
+    src: config.yaml.j2
+    dest: "{{ gts_config_path }}"
+    owner: "{{ gts_runtime_user }}"
+    group: "{{ gts_runtime_group }}"
+  tags: config, user, group, yaml
+  register: config_rendered
+
+- name: Log directory exists
+  ansible.builtin.file:
+    path: "{{ gts_log_directory }}"
+    state: directory
+    mode: "0775"
+    owner: "{{ gts_runtime_user }}"
+    group: "{{ gts_runtime_group }}"
+  tags: log, directory
+
+- name: Systemd service is present
+  ansible.builtin.template:
+    src: service.j2
+    dest: "/etc/systemd/system/{{ gts_service_name }}.service"
+    mode: "0664"
+  register: service_rendered
+  tags: systemd, service
+
+- name: Service is enabled and started
+  ansible.builtin.systemd:
+    name: "{{ gts_service_name }}"
+    state: started
+    enabled: true
+    daemon_reload: true
+  when: not(service_rendered.changed)
+  tags: systemd, service
+
+- name: Service is enabled and restarted
+  ansible.builtin.systemd:
+    name: "{{ gts_service_name }}"
+    state: restarted
+    enabled: true
+    daemon_reload: true
+  when: service_rendered.changed or config_rendered.changed
+  tags: systemd, service
+
+# Would have preferred lookup('ansible.builtin.url', ...), but it core-dumps on my Mac
+- name: Lookup admin user
+  ansible.builtin.command: |
+    curl --fail https://{{ gts_hostname }}/.well-known/webfinger?resource=acct:{{ gts_admin_user.username }}@{{ gts_hostname }}
+  register: webfinger_lookup
+  ignore_errors: true
+  tags: [ gts, admin, user, lookup ]
+
+# Might take a long time while waiting for migrations to complete
+- name: Admin user exists
+  ansible.builtin.command: |
+    "{{ gts_bin_directory }}/gotosocial"
+      --config-path "{{ gts_config_path }}"
+      admin account create
+      --username "{{ gts_admin_user.username }}"
+      --email "{{ gts_admin_user.email }}"
+      --password "{{ gts_admin_user.password }}"
+  when: webfinger_lookup.rc != 0
+  become_user: "{{ gts_runtime_user }}"
+  tags: [ gts, admin, user ]
+
+- name: Admin user is admin
+  ansible.builtin.command: |
+    "{{ gts_bin_directory }}/gotosocial"
+      --config-path "{{ gts_config_path }}"
+      admin account promote
+      --username "{{ gts_admin_user.username }}"
+  become_user: "{{ gts_runtime_user }}"
+  tags: [ gts, admin, user ]

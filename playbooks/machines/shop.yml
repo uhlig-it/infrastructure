@@ -1,0 +1,32 @@
+---
+# Source: github.com/uhlig-it/shop
+# Tailscale is configured by playbooks/fleet/tailscale.yml.
+# Camera and sensor variables live in inventory/host_vars/shop.yml.
+# TODO: migrate the local roles into roles/: switchbot-mqtt, shop-watchdog.
+- name: shop workshop Pi
+  hosts: shop
+  gather_facts: true
+  roles:
+    - role: suhlig.foundation.main
+      vars: { github_user: suhlig }
+      tags: [suhlig]
+    - role: suhlig.foundation.raspberry_pi
+      become: true
+      tags: [suhlig, raspi, raspberry, pi]
+    - role: suhlig.foundation.mediamtx
+      become: true
+      tags: [mediamtx]
+    - role: uhlig-it.ansible-role-mosquitto-bridge
+      tags: [mqtt, mosquitto, bridge]
+    - role: suhlig.foundation.log2ram
+      become: true
+      tags: [log2ram, sd, storage, stability]
+    - role: uhlig-it.duckdns
+      become: true
+      tags: [dns, duckdns, network, dhcp]
+    - role: switchbot-mqtt
+      become: true
+      tags: [switchbot, python, bluetooth, mqtt]
+    - role: shop-watchdog
+      become: true
+      tags: [watchdog, network, stability, wifi]

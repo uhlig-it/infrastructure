@@ -1,0 +1,6 @@
+- name: victoria-metrics restarted
+  service:
+    name: victoria-metrics
+    state: restarted
+    daemon_reload: true
+  tags: [ victoriametrics, systemd, service, restart ]

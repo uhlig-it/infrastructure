@@ -1,0 +1,74 @@
+---
+# Source: github.com/uhlig-it/mqtt-gpio-binary-sensor
+# Builds the binary from the app checkout (app_source) on the controller.
+# Per-host gpio_pin lives in inventory/host_vars/{pi5,shop}.yml.
+- name: Deploy the GPIO to MQTT Publisher
+  hosts: pi5:shop
+  become: true
+  gather_facts: true
+  pre_tasks:
+    - name: Go modules are downloaded
+      ansible.builtin.command:
+        cmd: go mod download
+        chdir: "{{ app_source }}"
+      delegate_to: localhost
+      become: false
+      tags: [mqtt-gpio-binary-sensor, go, modules]
+    - name: Target GOARCH and GOARM are derived from the host architecture
+      ansible.builtin.set_fact:
+        goarch: >-
+          {%- if ansible_facts.architecture == 'aarch64' -%}
+          arm64
+          {%- elif ansible_facts.architecture in ['armv6l', 'armv7l'] -%}
+          arm
+          {%- else -%}
+          {{ ansible_facts.architecture }}
+          {%- endif -%}
+        goarm: >-
+          {%- if ansible_facts.architecture == 'armv6l' -%}
+          6
+          {%- else -%}
+          7
+          {%- endif -%}
+      tags: [mqtt-gpio-binary-sensor, go, build]
+    - name: mqtt-gpio-binary-sensor release binary is built
+      ansible.builtin.command:
+        cmd: >-
+          make build GOOS=linux GOARCH={{ goarch }} GOARM={{ goarm }}
+        chdir: "{{ app_source }}"
+      delegate_to: localhost
+      become: false
+      tags: [mqtt-gpio-binary-sensor, go, build]
+    - name: Binary output path is determined
+      ansible.builtin.command:
+        cmd: make output-path GOOS=linux GOARCH={{ goarch }} GOARM={{ goarm }}
+        chdir: "{{ app_source }}"
+      delegate_to: localhost
+      register: output_path_result
+      become: false
+      tags: [mqtt-gpio-binary-sensor, binary, path]
+    - name: Path to binary is set
+      ansible.builtin.set_fact:
+        binary_path: "{{ output_path_result.stdout }}"
+      tags: [mqtt-gpio-binary-sensor, binary, path]
+  roles:
+    - role: uhlig-it.simple_systemd_service
+      become: true
+      vars:
+        systemd:
+          target: network-online.target
+          restart: always
+          restart_sec: 5s
+          start_limit_interval: 5m
+          start_limit_burst: 20
+        program:
+          binary: "{{ app_source }}/{{ binary_path }}"
+          name: mqtt-gpio-binary-sensor
+          environment:
+            MQTT_URL: "{{ mqtt_gpio_binary_sensor_mqtt_url }}"
+          parameters:
+            - --pin "{{ gpio_pin }}"
+            - --verbose
+          description: GPIO to MQTT Publisher
+          runtime_user: mqtt-gpio-binary-sensor
+          groups: [gpio]

@@ -1,0 +1,63 @@
+---
+# Source: github.com/uhlig-it/concourse-deployment
+# Secrets (concourse_postgres_*, web/worker keys) live in the vault.
+# Uses suhlig.concourse, a fork of troykinsella.concourse with the removed
+# `include` action fixed (installed from git, not Galaxy).
+- name: Deploy Concourse databases
+  hosts: databases
+  become: true
+  pre_tasks:
+    - name: Required apt packages are installed
+      ansible.builtin.apt:
+        update_cache: true
+        name: python3-psycopg2
+        state: present
+      tags: [concourse, db, postgres]
+  roles:
+    - role: ANXS.postgresql
+      vars:
+        postgresql_version: 16
+        postgresql_apt_py3_dependencies: ["python3-psycopg2", "locales"]
+        postgresql_apt_py2_dependencies: []
+        postgresql_users:
+          - name: "{{ concourse_postgres_user }}"
+            pass: "{{ concourse_postgres_password }}"
+            encrypted: true
+        postgresql_databases:
+          - name: "{{ concourse_postgres_database }}"
+            owner: "{{ concourse_postgres_user }}"
+      become: true
+      tags: [concourse, db, postgres]
+
+- name: Deploy Concourse web
+  hosts: atc
+  roles:
+    - role: suhlig.concourse
+      become: true
+      vars:
+        concourse_web: true
+        concourse_external_url: https://concourse.tailnet-204f.ts.net
+        concourse_web_env:
+          CONCOURSE_BIND_PORT: 8080
+          CONCOURSE_BIND_IP: 127.0.0.1
+      tags: [concourse, web]
+    - role: suhlig.foundation.tailscale_service
+      become: true
+      vars:
+        tailscale_service_name: svc:concourse
+        tailscale_service_port: 443
+        tailscale_service_backend: http://localhost:8080
+      tags: [tailscale, service]
+
+- name: Deploy Concourse worker
+  hosts: workers
+  roles:
+    - role: suhlig.concourse
+      become: true
+      vars:
+        concourse_worker: true
+        concourse_tsa_host: soda:2222
+        concourse_work_dir: /mnt/concourse-worker-dir
+        concourse_worker_env:
+          CONCOURSE_CONTAINERD_DNS_SERVER: 100.100.100.100,9.9.9.9
+      tags: [concourse, worker]

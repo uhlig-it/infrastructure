@@ -1,0 +1,6 @@
+---
+ansible_user: suhlig
+
+# is-tls-expiring
+is_tls_expiring_hostname: pascal.tailnet-204f.ts.net
+is_tls_expiring_lookahead: 7d

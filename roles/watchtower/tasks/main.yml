@@ -1,0 +1,24 @@
+- name: Watchtower is running
+  community.docker.docker_container:
+    name: watchtower
+    image: nickfedor/watchtower
+    pull: true
+    state: started
+    detach: true
+    privileged: true
+    restart: true
+    restart_policy: always
+    env:
+      TZ: Europe/Berlin
+      WATCHTOWER_CLEANUP: "true"
+      WATCHTOWER_HTTP_API_UPDATE: "true"
+      WATCHTOWER_HTTP_API_TOKEN: Zielwasser keimt starke Wolken
+      WATCHTOWER_HTTP_API_METRICS: "true"
+      WATCHTOWER_HTTP_API_PERIODIC_POLLS: "true" # without this, enabling the HTTP API prevents periodic polls
+      WATCHTOWER_NOTIFICATION_REPORT: "true"
+      WATCHTOWER_NOTIFICATION_URL: ntfy://ntfy.sh/watchtower-a16128a0-fb0d-406e-a685-dfae2ac76c0f
+    ports:
+      - "8380:8080/tcp" # http API
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+  tags: [ docker, watchtower, container ]

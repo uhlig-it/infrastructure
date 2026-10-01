@@ -1,0 +1,26 @@
+---
+ansible_user: suhlig
+
+# Workshop Pi: subnet router for the 192.168.1.0/24 LAN.
+tailscale_args: --advertise-routes=192.168.1.0/24 --accept-routes --ssh
+
+# mediamtx camera (IMX219 Noir sensor).
+rpiCameraWidth: 1640
+rpiCameraHeight: 1232
+rpiCameraVFlip: true
+rpiCameraHFlip: true
+rpiCameraExposure: long
+rpiCameraDenoise: "cdn_hq"
+rpiCameraTuningFile: /usr/share/libcamera/ipa/rpi/vc4/imx219_noir.json
+rpiCameraGain: 40
+rpiCameraFPS: 2
+rpiCameraTextOverlayEnable: true
+rpiCameraTextOverlay: "Werkstatt %Y-%m-%d %H:%M:%S"
+
+# mqtt-gpio-binary-sensor
+gpio_pin: GPIO4
+
+# env-sensors
+bme280_address: "0x76"
+tsl2561_address: "0x39"
+location: werkstatt

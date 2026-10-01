@@ -1,0 +1,16 @@
+---
+# Source: github.com/uhlig-it/pi5
+# Tailscale is configured by playbooks/fleet/tailscale.yml.
+- name: pi5
+  hosts: pi5
+  roles:
+    - role: suhlig.foundation.main
+      vars: { github_user: suhlig }
+      tags: [suhlig]
+    - role: suhlig.foundation.raspberry_pi
+      tags: [suhlig, raspi, raspberry, pi]
+    - role: gantsign.golang
+      tags: [go]
+    - role: geerlingguy.docker
+      vars: { docker_users: [suhlig] }
+      tags: [docker]

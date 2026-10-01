@@ -1,0 +1,31 @@
+---
+# Source: github.com/suhlig/wordclock
+# Tailscale is configured by playbooks/fleet/tailscale.yml.
+# TODO: CI must pass app_source (path to the wordclock checkout).
+- name: wordclock
+  hosts: wordclock
+  vars:
+    hostname: wordclock
+  roles:
+    - role: suhlig.foundation.minimal
+      become: true
+      tags: [suhlig]
+    - role: suhlig.foundation.raspberry_pi
+      become: true
+      tags: [suhlig, raspi, raspberry, pi]
+    - role: fadecandy
+    - role: nerab.ruby
+      vars:
+        ruby_version:
+          major: 4
+          minor: 0
+          teeny: 5
+      tags: [ruby]
+    - role: ansistrano.deploy
+      vars:
+        ansistrano_deploy_from: "{{ app_source }}"
+        ansistrano_deploy_to: "~/apps/wordclock"
+        ansistrano_current_via: symlink
+        ansistrano_deploy_via: rsync
+        ansistrano_after_symlink_tasks_file: "{{ infrastructure_root }}/roles/wordclock/main.yml"
+      tags: [deploy, capistrano, ansistrano]

@@ -1,0 +1,49 @@
+## VictoriaMetrics ------------------------------------------------------------
+
+# Version of VictoriaMetrics single-node to install.
+# Release asset: victoria-metrics-linux-amd64-v<version>.tar.gz
+victoriametrics_version: 1.150.0
+# sha256 of the release asset; update together with victoriametrics_version
+# (taken from the *_checksums.txt file attached to the release).
+victoriametrics_checksum: sha256:22bfe77be3de1ad03f214a005129312536d77ed4e293b66c186df417ee40a61d
+
+victoriametrics_binary_path: /usr/local/bin/victoria-metrics-prod
+victoriametrics_config_dir: /etc/victoria-metrics
+victoriametrics_dashboards_dir: "{{ victoriametrics_config_dir }}/dashboards"
+
+# Must match StateDirectory= in the systemd unit
+# (StateDirectory=victoria-metrics creates /var/lib/victoria-metrics).
+victoriametrics_storage_path: /var/lib/victoria-metrics
+
+# Retention in months when no unit is given (Prometheus-style suffixes work too).
+victoriametrics_retention_period: 12
+
+# Bound to loopback only: the sole ingress path is tailscaled
+# (device-level "tailscale serve" or the Tailscale Service below).
+victoriametrics_http_listen_addr: 127.0.0.1:8428
+victoriametrics_self_scrape_interval: 10s
+victoriametrics_scrape_interval: 30s
+
+## Basic auth ------------------------------------------------------------------
+
+# HTTP endpoints incl. vmui; leave the password empty to disable auth.
+# Reuses the same vault var as the old Prometheus web config.
+victoriametrics_http_auth_username: suhlig
+victoriametrics_http_auth_password: "{{ prometheus_password_suhlig | default('') }}"
+
+## Tailscale Service ------------------------------------------------------------
+
+# Published via the shared suhlig.foundation.tailscale_service role
+# (see playbook.yml); the Service name must match a Service defined in the
+# admin console. Set to false to skip the Tailscale role.
+victoriametrics_tailscale_service: true
+victoriametrics_tailscale_service_name: svc:metrics
+victoriametrics_tailscale_service_port: 443
+
+## Scrape target secrets --------------------------------------------------------
+
+# Sourced from the same vault vars as before.
+victoriametrics_node_exporter_password: "{{ node_exporter_password | default('') }}"
+victoriametrics_gotosocial_password: "{{ gotosocial_metrics_password | default('') }}"
+victoriametrics_watchtower_token: "{{ watchtower_bearer_token | default('') }}"
+victoriametrics_gosund_password: "{{ gosund_metrics_password | default('') }}"

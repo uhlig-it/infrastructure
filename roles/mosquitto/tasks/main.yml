@@ -1,0 +1,47 @@
+- name: Directories exist
+  ansible.builtin.file:
+    path: /opt/mosquitto/{{ item }}
+    state: directory
+    owner: suhlig
+    group: suhlig
+  with_items: [ config, data, log ]
+  become: true
+  tags: [ docker, mosquitto, mqtt, directory ]
+- name: Password file exists # needs to exist for bootstrapping
+  file:
+    path: /opt/mosquitto/config/passwd
+    state: touch
+    owner: suhlig
+    group: suhlig
+  become: true
+- name: Password file is up to date
+  community.docker.docker_container:
+    name: generate-mosquitto-passwd-file
+    image: eclipse-mosquitto
+    command: "mosquitto_passwd -b /mosquitto/config/passwd {{ item.name | quote }} {{ item.password | quote }}"
+    detach: true
+    volumes: [ /opt/mosquitto/config:/mosquitto/config ]
+  loop: "{{ mosquitto_users }}"
+  tags: [ docker, mosquitto, mqtt, passwd, file ]
+- name: Config is rendered
+  template:
+    src: templates/mosquitto.conf
+    dest: /opt/mosquitto/config/mosquitto.conf
+  become: true
+  tags: [ config, mosquitto, mqtt ]
+- name: Service is running
+  community.docker.docker_container:
+    name: mosquitto
+    image: eclipse-mosquitto
+    pull: true
+    state: started
+    detach: true
+    restart: true
+    restart_policy: always
+    network_mode: host
+    volumes:
+      - /opt/mosquitto/config/mosquitto.conf:/mosquitto/config/mosquitto.conf
+      - /opt/mosquitto/config/passwd:/mosquitto/config/passwd
+      - /opt/mosquitto/data:/mosquitto/data
+      - /opt/mosquitto/log:/mosquitto/log
+  tags: [ docker, mosquitto, mqtt ]

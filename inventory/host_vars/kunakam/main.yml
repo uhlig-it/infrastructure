@@ -1,0 +1,8 @@
+---
+ansible_user: suhlig
+
+# mediamtx camera (IMX219 Noir sensor).
+rpiCameraTuningFile: /usr/share/libcamera/ipa/rpi/vc4/imx219_noir.json
+rpiCameraAfMode: auto
+rpiCameraTextOverlayEnable: true
+rpiCameraTextOverlay: "kunakam %Y-%m-%d %H:%M:%S"

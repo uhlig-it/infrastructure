@@ -1,0 +1,116 @@
+- name: GPG key is trusted
+  apt_key:
+    url: https://packages.cloud.google.com/apt/doc/apt-key.gpg
+    keyring: /etc/apt/trusted.gpg.d/google-keyring.gpg
+  tags: [ apt, key, google, coral, edgetpu ]
+- name: Apt source config for coral-edgetpu is present
+  apt_repository:
+    repo: "{{ item }}"
+    filename: ookla_speedtest-cli
+  with_items:
+    - "deb https://packages.cloud.google.com/apt coral-edgetpu-stable main"
+  tags: [ apt, source, config, google, coral, edgetpu ]
+- name: Edge TPU runtime is installed
+  apt: { name: "{{ packages }}" }
+  vars: { packages: [ libedgetpu1-std ] }
+  become: yes
+  tags: [ apt, google, coral, edgetpu ]
+- name: Frigate directory exists
+  ansible.builtin.file:
+    path: /opt/frigate
+    state: directory
+    owner: suhlig
+    group: suhlig
+  become: true
+  tags: [ frigate, directory ]
+- name: Config file is present
+  template:
+    src: config.yml.j2
+    dest: /opt/frigate/config.yml
+    mode: "0755"
+    owner: suhlig
+    group: suhlig
+  become: true
+  tags: [ frigate, config ]
+- name: Container is up to date
+  community.docker.docker_container:
+    name: frigate
+    image: ghcr.io/blakeblackshear/frigate:stable
+    pull: true
+    state: present
+    recreate: true
+    detach: true
+    privileged: true
+    restart: true
+    restart_policy: always
+    volumes:
+      - /opt/frigate/storage:/media/frigate
+      - /opt/frigate/config.yml:/config/config.yml
+      - /etc/localtime:/etc/localtime:ro
+      - /dev/bus/usb:/dev/bus/usb # USB Coral
+    published_ports:
+      - 5000:5000
+      - 8554:8554
+      - 8555:8555/tcp
+      - 8555:8555/udp
+    mounts:
+      - type: tmpfs
+        target: /tmp/cache
+        tmpfs_size: "10G"
+    shm_size: 64m
+  tags: [ docker, frigate, container ]
+- name: Container is running
+  community.docker.docker_container:
+    name: frigate
+    image: ghcr.io/blakeblackshear/frigate:stable
+    pull: true
+    state: started
+    detach: true
+    privileged: true
+    restart: true
+    restart_policy: always
+    volumes:
+      - /opt/frigate/storage:/media/frigate
+      - /opt/frigate/config.yml:/config/config.yml
+      - /etc/localtime:/etc/localtime:ro
+      - /dev/bus/usb:/dev/bus/usb # USB Coral
+    published_ports:
+      - 5000:5000
+      - 8554:8554
+      - 8555:8555/tcp
+      - 8555:8555/udp
+    mounts:
+      - type: tmpfs
+        target: /tmp/cache
+        tmpfs_size: "10G"
+    shm_size: 64m
+  tags: [ docker, frigate, container ]
+- name: Recordings directory exists
+  ansible.builtin.file:
+    path: /opt/frigate/storage/recordings
+    state: directory
+  become: true
+  tags: [ frigate, cleanup ]
+- name: Recordings older than retention are found
+  ansible.builtin.find:
+    paths: /opt/frigate/storage/recordings
+    file_type: directory
+    depth: 1
+    age: "{{ frigate_record_retain_days }}d"
+  register: stale_recordings
+  tags: [ frigate, cleanup ]
+- name: Stale recordings are deleted
+  ansible.builtin.file:
+    path: "{{ item.path }}"
+    state: absent
+  loop: "{{ stale_recordings.files | map(attribute='path') | list }}"
+  become: true
+  tags: [ frigate, cleanup ]
+- name: Stale recordings are cleaned up nightly
+  ansible.builtin.cron:
+    name: frigate recording cleanup
+    user: root
+    minute: "30"
+    hour: "4"
+    job: "/usr/bin/find /opt/frigate/storage/recordings -mindepth 1 -maxdepth 1 -type d -mtime +{{ frigate_record_retain_days }} -exec rm -rf {} +"
+  tags: [ frigate, cleanup, cron ]

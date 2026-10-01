@@ -1,0 +1,32 @@
+---
+# Source: github.com/uhlig-it/fortress
+# Tailscale is configured by playbooks/fleet/tailscale.yml.
+- name: Fortress
+  hosts: fortress
+  collections:
+    - thorian93.main
+    - suhlig.foundation
+  roles:
+    - role: thorian93.main.upgrade
+      vars: { upgrade_stable_os: [Debian-11, Debian-12, Debian-13] }
+      become: true
+    - role: thorian93.main.journald
+      vars: { journald_stable_os: [Debian-11, Debian-12, Debian-13] }
+      become: true
+    - role: thorian93.main.common
+      vars:
+        common_configure_timezone: true
+        common_timezone: "{{ timezone }}"
+        common_stable_os: [Debian-11, Debian-12, Debian-13]
+      become: true
+    - role: thorian93.main.ntp
+      vars: { ntp_stable_os: [Debian-11, Debian-12, Debian-13] }
+      become: true
+    - role: suhlig.foundation.main
+      become: true
+    - role: suhlig.foundation.raspberry_pi
+      become: true
+      tags: [raspi, raspberry, pi]
+    - role: suhlig.foundation.speedtest
+      become: true
+      tags: [speedtest, metrics]

@@ -1,0 +1,64 @@
+[Unit]
+Description=VictoriaMetrics
+Documentation=https://docs.victoriametrics.com/
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+
+# Ephemeral UID; systemd owns and chowns the data directory.
+# The static group below gives access to root-owned config files.
+DynamicUser=yes
+SupplementaryGroups=victoriametrics
+StateDirectory=victoria-metrics
+UMask=0027
+
+EnvironmentFile={{ victoriametrics_config_dir }}/env
+
+ExecStart={{ victoriametrics_binary_path }} \
+  -storageDataPath={{ victoriametrics_storage_path }} \
+  -retentionPeriod={{ victoriametrics_retention_period }} \
+  -httpListenAddr={{ victoriametrics_http_listen_addr }} \
+  -selfScrapeInterval={{ victoriametrics_self_scrape_interval }} \
+  -promscrape.config={{ victoriametrics_config_dir }}/prometheus.yml \
+  -promscrape.configCheckInterval=1m \
+  -vmui.customDashboardsPath={{ victoriametrics_dashboards_dir }} \
+  -envflag.enable -envflag.prefix=VM_
+
+# Sandboxing. Deliberately NOT set:
+#   PrivateNetwork=yes would break the tailscaled proxy (isolated loopback)
+#   and outbound scraping of LAN targets; IPAddressAllow/Deny would break
+#   egress to scrape targets.
+NoNewPrivileges=yes
+PrivateTmp=yes
+PrivateDevices=yes
+ProtectSystem=strict
+ProtectHome=yes
+ProtectClock=yes
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectKernelLogs=yes
+ProtectControlGroups=yes
+ProtectHostname=yes
+ProtectProc=invisible
+ProcSubset=pid
+RestrictSUIDSGID=yes
+RestrictRealtime=yes
+LockPersonality=yes
+MemoryDenyWriteExecute=yes
+SystemCallArchitectures=native
+# Go 1.26 uses rseq (restartable sequences), and the VictoriaMetrics storage
+# layer uses mincore()/fadvise64() page-cache hints; none of these are in
+# @system-service on all systemd versions. EPERM instead of SIGSYS keeps the
+# Go runtime's graceful fallbacks working for any other optional syscalls.
+SystemCallFilter=@system-service rseq mincore fadvise64
+SystemCallErrorNumber=EPERM
+CapabilityBoundingSet=
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
+LimitNOFILE=1048576
+
+Restart=always
+
+[Install]
+WantedBy=multi-user.target

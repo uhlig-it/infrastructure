@@ -1,0 +1,31 @@
+- name: Dependencies are installed
+  ansible.builtin.apt: { name: "{{ packages }}" }
+  vars: { packages: [ pipx ] }
+  tags: [ apt, pip ]
+- name: "{{ ansible_role_name }} is installed"
+  community.general.pipx: { name: switchbot-mqtt }
+  tags: [ python, pip ]
+- name: Systemd service is present
+  ansible.builtin.template:
+    src: service.j2
+    dest: "/etc/systemd/system/{{ ansible_role_name }}.service"
+    mode: "0664"
+  register: service_rendered
+  tags: [ systemd, service ]
+- name: Systemd service is enabled and started
+  # Shared systemd args (anchor) for both tasks; 'state' is set per task.
+  vars: &service
+    name: "{{ ansible_role_name }}.service"
+    enabled: true
+    daemon_reload: true
+  ansible.builtin.systemd:
+    <<: *service
+    state: started
+  when: not(service_rendered.changed)
+  tags: [ systemd, service ]
+- name: Systemd service is enabled and restarted
+  ansible.builtin.systemd:
+    <<: *service
+    state: restarted
+  when: service_rendered.changed
+  tags: [ systemd, service ]

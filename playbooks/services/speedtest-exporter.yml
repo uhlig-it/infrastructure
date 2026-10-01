@@ -1,0 +1,66 @@
+---
+# Source: github.com/uhlig-it/speedtest-exporter
+# Builds the binary from the app checkout (app_source) on the controller.
+- name: Deploy the Speedtest Exporter
+  hosts: hansahaus:fortcarsta:opus
+  become: true
+  gather_facts: true
+  pre_tasks:
+    - name: Go modules are downloaded
+      ansible.builtin.command:
+        cmd: go mod download
+        chdir: "{{ app_source }}"
+      delegate_to: localhost
+      become: false
+      tags: [speedtest-exporter, go, modules]
+    - name: Target GOARCH and GOARM are derived from the host architecture
+      ansible.builtin.set_fact:
+        goarch: >-
+          {%- if ansible_facts.architecture == 'aarch64' -%}
+          arm64
+          {%- elif ansible_facts.architecture in ['armv6l', 'armv7l'] -%}
+          arm
+          {%- else -%}
+          {{ ansible_facts.architecture }}
+          {%- endif -%}
+        goarm: >-
+          {%- if ansible_facts.architecture == 'armv6l' -%}
+          6
+          {%- else -%}
+          7
+          {%- endif -%}
+      tags: [speedtest-exporter, go, build]
+    - name: Speedtest-exporter release binary is built
+      ansible.builtin.command:
+        cmd: >-
+          make build GOOS=linux GOARCH={{ goarch }} GOARM={{ goarm }}
+        chdir: "{{ app_source }}"
+      delegate_to: localhost
+      become: false
+      tags: [speedtest-exporter, go, build]
+    - name: Binary output path is determined
+      ansible.builtin.command:
+        cmd: make output-path GOOS=linux GOARCH={{ goarch }} GOARM={{ goarm }}
+        chdir: "{{ app_source }}"
+      delegate_to: localhost
+      register: output_path_result
+      become: false
+      tags: [speedtest-exporter, binary, path]
+    - name: Path to binary is set
+      ansible.builtin.set_fact:
+        binary_path: "{{ output_path_result.stdout }}"
+      tags: [speedtest-exporter, binary, path]
+  roles:
+    - role: uhlig-it.simple_systemd_service
+      become: true
+      vars:
+        program:
+          name: speedtest-exporter
+          binary: "{{ app_source }}/{{ binary_path }}"
+          description: Speedtest exporter for Prometheus
+          runtime_user: speedtest-exporter
+          parameters:
+            - --verbose
+            - --interval 1h
+            - --bind-address :{{ metrics.port }}
+          environment: { HOME: /tmp } # needed for speedtest cli to work properly

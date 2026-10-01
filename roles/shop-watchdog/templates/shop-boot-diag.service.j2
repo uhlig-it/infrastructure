@@ -1,0 +1,10 @@
+[Unit]
+Description=Log shop boot diagnostics
+After=network.target tailscaled.service
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/sbin/shop-boot-diag.sh
+
+[Install]
+WantedBy=multi-user.target

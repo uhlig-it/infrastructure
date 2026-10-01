@@ -1,0 +1,26 @@
+---
+# Source: github.com/uhlig-it/mosquitto-exporter-deployment
+# CURRENTLY DEPLOYED NOWHERE — needs resurrection.
+# The source repo targeted `wg`, which is retired, and the public broker
+# mqtt.uhlig.it is being decommissioned. Decide where the exporter belongs
+# (likely opus, next to the surviving Mosquitto broker) before enabling.
+# The binary is built by CI and passed as service_binary (extra-var).
+# Secrets (bind_address, mqtt.*) live in the vault.
+- name: Deploy Mosquitto Prometheus Exporter
+  hosts: unassigned
+  gather_facts: true
+  become: true
+  roles:
+    - role: uhlig-it.simple_systemd_service
+      become: true
+      vars:
+        program:
+          name: mosquitto-prometheus-exporter
+          description: Export Mosquitto metrics for Prometheus
+          binary: "{{ service_binary }}"
+          environment:
+            BIND_ADDRESS: "{{ bind_address }}"
+            BROKER_ENDPOINT: "{{ mqtt.endpoint }}"
+            MQTT_USER: "{{ mqtt.username }}"
+            MQTT_PASS: "{{ mqtt.password }}"
+      tags: [mqtt, mosquitto, prometheus, exporter]

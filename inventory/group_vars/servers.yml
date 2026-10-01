@@ -1,0 +1,3 @@
+---
+# Hetzner servers (neon, soda) are reached as root.
+ansible_user: root

@@ -1,0 +1,8 @@
+---
+ansible_user: suhlig
+
+# mqtt-gpio-binary-sensor
+gpio_pin: GPIO4
+
+# gantsign.golang
+golang_version: "1.26.2"

@@ -1,0 +1,16 @@
+---
+# Source: github.com/uhlig-it/pi0
+# Tailscale is configured by playbooks/fleet/tailscale.yml.
+# Camera variables live in inventory/host_vars/pi0.yml.
+- name: pi0
+  hosts: pi0
+  roles:
+    - role: suhlig.foundation.minimal
+      become: true
+      tags: [suhlig]
+    - role: suhlig.foundation.raspberry_pi
+      become: true
+      tags: [suhlig, raspi, raspberry, pi]
+    - role: suhlig.foundation.mediamtx
+      become: true
+      tags: [mediamtx]

@@ -1,0 +1,17 @@
+---
+# Source: github.com/uhlig-it/www
+# The Zola build stays in the app repo's CI; this playbook only configures the
+# server. The built content is rsynced to /var/www/uhlig.it by the pipeline.
+- name: Deploy uhlig.it
+  hosts: neon
+  become: true
+  vars:
+    domain: uhlig.it
+  roles:
+    - role: suhlig.caddy_file_server
+      vars:
+        caddy_domain: "{{ domain }}"
+        caddy_content_directory: "/var/www/{{ domain }}"
+        caddy_additional_config: |
+          try_files {path}.html {path}
+      tags: [caddy, static, files]

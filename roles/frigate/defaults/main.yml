@@ -1,0 +1,4 @@
+# Number of days to keep recordings. Frigate enforces this itself for
+# recordings it knows about; the cleanup task sweeps up the rest (e.g.
+# recordings from before a database reset that Frigate no longer tracks).
+frigate_record_retain_days: 3

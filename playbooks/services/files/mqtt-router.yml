@@ -1,0 +1,38 @@
+werkstatt/lock/cmnd:
+  arm:
+    - werkstatt/licht/hinten/cmnd: { message: "off" }
+    - werkstatt/strom/cmnd:
+        message: "off"
+        after: 2s # leave some time for the servo to return
+    - werkstatt/blink1/cmnd:
+        message:
+          color: { r: 255, g: 0, b: 0 }
+    - frigate/shop/detect/set:
+        message: on
+        after: 30s # leave some time to leave the building
+    - werkstatt/lock/status: { message: armed }
+  disarm:
+    - werkstatt/strom/cmnd: { message: "on" }
+    - werkstatt/radio/cmnd: { message: "on", after: 2s }
+    - werkstatt/blink1/cmnd:
+        message:
+          color: { r: 0, g: 255, b: 0 }
+    - werkstatt/licht/hinten/cmnd: { message: "on" }
+    - frigate/shop/detect/set: { message: "off" }
+    - werkstatt/lock/status: { message: "disarmed" }
+werkstatt/door:
+  opened: [ cmnd/feinstaub/led/red: { message: "true" } ]
+  closed: [ cmnd/feinstaub/led/red: { message: "false" } ]
+  werkstatt/radio/cmnd:
+  on: [ werkstatt/switch/switchbot/CC:26:79:A1:4A:B5/set: { message: "on" } ]
+werkstatt/strom/cmnd:
+  on:  [ werkstatt/gosunds/cmnd/power: { message: "on" } ]
+  off: [ werkstatt/gosunds/cmnd/power: { message: "off" } ]
+werkstatt/licht/hinten/state: # Turn off power whenever the light in the back goes off
+  off: [ werkstatt/strom/cmnd: { message: "off" } ]
+werkstatt/licht/hinten/cmnd: # Translate the logical command topic into physical servo movement
+  on: [ werkstatt/lightservo/cmnd/13: { message: "40°,300ms,110°" } ]
+  off: [ werkstatt/lightservo/cmnd/12: { message: "40°,300ms,110°" } ]
+werkstatt/lightservo/state: # Translate the physical servo status into logical light state topic
+  '{"13":{"angle":{"value":110,"unit":"°"}}}': [ werkstatt/licht/state: { message: "on" } ]
+  '{"12":{"angle":{"value":110,"unit":"°"}}}': [ werkstatt/licht/state: { message: "off" } ]

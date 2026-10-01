@@ -1,0 +1,53 @@
+{
+  "title": "Nodes overview",
+  "rows": [
+    {
+      "title": "CPU & load",
+      "panels": [
+        {
+          "title": "CPU usage by node",
+          "width": 6,
+          "expr": [
+            "sum by (instance) (rate(node_cpu_seconds_total{mode!=\"idle\"}[5m])) * 100"
+          ]
+        },
+        {
+          "title": "Load average (1m)",
+          "width": 6,
+          "expr": [
+            "node_load1"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "Memory",
+      "panels": [
+        {
+          "title": "Memory in use",
+          "width": 6,
+          "expr": [
+            "node_memory_MemTotal_bytes - node_memory_MemAvailable_bytes"
+          ],
+          "alias": [
+            "{{instance}}"
+          ],
+          "unit": "bytes"
+        }
+      ]
+    },
+    {
+      "title": "Disk",
+      "panels": [
+        {
+          "title": "Disk space in use (excl. tmpfs/overlay)",
+          "width": 12,
+          "expr": [
+            "sum by (instance) (node_filesystem_size_bytes{fstype!~\"tmpfs|overlay|squashfs\"} - node_filesystem_avail_bytes{fstype!~\"tmpfs|overlay|squashfs\"})"
+          ],
+          "unit": "bytes"
+        }
+      ]
+    }
+  ]
+}

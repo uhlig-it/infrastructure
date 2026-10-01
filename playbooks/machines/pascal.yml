@@ -1,0 +1,26 @@
+---
+# Source: github.com/uhlig-it/pascal
+# Tailscale is configured by playbooks/fleet/tailscale.yml.
+# TODO: migrate the inline tasks from the source repo:
+#       - install github3.py
+#       - fetch is-tls-expiring release + refresh-tailscale-cert + cron
+#       - install shop-health script/service/timer
+- name: pascal 3D printer server
+  hosts: pascal
+  collections:
+    - thorian93.main
+    - suhlig.foundation
+  roles:
+    - role: thorian93.main.upgrade
+      become: true
+    - role: thorian93.main.journald
+      become: true
+    - role: thorian93.main.common
+      vars:
+        common_configure_timezone: true
+        common_timezone: "{{ timezone }}"
+      become: true
+    - role: thorian93.main.ntp
+      become: true
+    - role: suhlig.foundation.main
+      become: true

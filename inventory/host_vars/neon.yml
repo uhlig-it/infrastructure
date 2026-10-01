@@ -1,0 +1,4 @@
+---
+ansible_user: root
+
+# Hosts kehrkraft, GoToSocial, uhlig.it, speisehof.de, nowak-reisen.de.

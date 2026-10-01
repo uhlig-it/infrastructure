@@ -1,0 +1,3 @@
+---
+# Raspberry Pi hosts are reached as the regular user.
+ansible_user: suhlig

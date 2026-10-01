@@ -1,0 +1,12 @@
+---
+# Source: github.com/uhlig-it/{kehrkraft-deployment,uhlig.social-deployment,www}
+# neon is a Hetzner server. It has no dedicated baseline playbook today;
+# its software is deployed by playbooks/services/*.yml.
+# TODO: decide whether neon needs a baseline (Caddy, journald, upgrades).
+- name: neon server baseline
+  hosts: neon
+  tasks:
+    - name: Placeholder
+      ansible.builtin.debug:
+        msg: "neon baseline not yet defined"
+      changed_when: false

@@ -1,0 +1,19 @@
+{{ ansible_managed | comment}}
+
+[Unit]
+Description=Switchbot MQTT bridge
+After=bluetooth.target
+
+[Service]
+Type=simple
+ExecStart=/root/.local/bin/{{ ansible_role_name }} \
+  --mqtt-host {{ switchbot.host }} \
+  --mqtt-port {{ switchbot.port }} \
+  --mqtt-username {{ switchbot.username }} \
+  --mqtt-password {{ switchbot.password }} \
+  --mqtt-topic-prefix {{ switchbot.topic_prefix }} \
+  --mqtt-disable-tls \
+  --fetch-device-info
+
+[Install]
+WantedBy=default.target

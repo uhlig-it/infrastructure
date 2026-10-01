@@ -1,0 +1,22 @@
+---
+# Source: github.com/nowak-reisen/www (outside the workspace)
+- name: Deploy nowak-reisen.de
+  hosts: neon
+  become: true
+  vars:
+    domain: nowak-reisen.de
+  roles:
+    - role: ansistrano.deploy
+      vars:
+        ansistrano_deploy_from: "{{ app_source }}/site"
+        ansistrano_deploy_to: "/var/www/{{ domain }}"
+        ansistrano_current_via: symlink
+        ansistrano_deploy_via: rsync
+      tags: [html, site, ansistrano]
+    - role: suhlig.caddy_file_server
+      vars:
+        caddy_domain: "{{ domain }}"
+        caddy_content_directory: "/var/www/{{ domain }}/current"
+        caddy_additional_config: |
+          try_files {path}.html {path}
+      tags: [caddy, static, files]

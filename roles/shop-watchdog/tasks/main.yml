@@ -1,0 +1,61 @@
+---
+- name: Watchdog prerequisite is installed
+  ansible.builtin.apt:
+    name: [ iw ]
+    update_cache: true
+  become: true
+  tags: [ apt, watchdog ]
+- name: Watchdog script is in place
+  ansible.builtin.copy:
+    src: watchdog.sh
+    dest: /usr/local/sbin/shop-watchdog.sh
+    mode: "0755"
+  tags: [ watchdog ]
+- name: Boot diagnostics script is in place
+  ansible.builtin.copy:
+    src: boot-diag.sh
+    dest: /usr/local/sbin/shop-boot-diag.sh
+    mode: "0755"
+  tags: [ watchdog ]
+- name: Watchdog log directory exists
+  ansible.builtin.file:
+    path: /var/lib/shop-watchdog
+    state: directory
+    mode: "0755"
+  tags: [ watchdog ]
+- name: WiFi regulatory domain is set
+  # Persistent per https://wireless.wiki.kernel.org/en/developers/regulatory
+  ansible.builtin.lineinfile:
+    path: /etc/wpa_supplicant/wpa_supplicant.conf
+    line: country=DE
+    insertbefore: BOF
+    create: true
+  tags: [ wifi, watchdog ]
+- name: Systemd units are present
+  ansible.builtin.template:
+    src: "{{ item }}"
+    dest: "/etc/systemd/system/{{ item | replace('.j2', '') }}"
+    mode: "0644"
+  loop:
+    - shop-watchdog.service.j2
+    - shop-watchdog.timer.j2
+    - shop-boot-diag.service.j2
+    - shop-wifi-keepalive.service.j2
+  register: units
+  tags: [ systemd, watchdog ]
+- name: Watchdog timer is enabled and started
+  ansible.builtin.systemd:
+    name: shop-watchdog.timer
+    enabled: true
+    daemon_reload: "{{ units.changed }}"
+    state: started
+  tags: [ systemd, watchdog ]
+- name: Boot services are enabled
+  ansible.builtin.systemd:
+    daemon_reload: "{{ units.changed }}"
+    enabled: true
+    name: "{{ item }}"
+  loop:
+    - shop-boot-diag.service
+    - shop-wifi-keepalive.service
+  tags: [ systemd, watchdog ]

@@ -1,0 +1,14 @@
+- name: Uptime Kuma is running
+  community.docker.docker_container:
+    name: uptime-kuma
+    image: louislam/uptime-kuma:2
+    pull: true
+    state: started
+    detach: true
+    restart: true
+    restart_policy: always
+    ports:
+      - "3001:3001"
+    volumes:
+      - uptime-kuma:/app/data
+  tags: [ docker, uptime-kuma, container ]

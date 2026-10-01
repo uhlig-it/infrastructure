@@ -1,0 +1,49 @@
+# {{ ansible_managed }}
+mqtt:
+  enabled: true
+  host: {{ frigate.mqtt.host }}
+  user: {{ frigate.mqtt.user }}
+  password: {{ frigate.mqtt.password }}
+cameras:
+{% for name, url in cameras.items() %}
+  {{ name }}:
+    enabled: true
+    ffmpeg:
+      inputs:
+        - path: {{ url }}
+          roles:
+            - detect
+            - record
+    mqtt:
+      enabled: false # do not publish snapshot via mqtt
+{% endfor %}
+detectors:
+  coral:
+    type: edgetpu
+    device: usb
+objects:
+  track:
+    - person
+    - car
+    - bird
+    - cat
+    - dog
+# Schema for Frigate 0.15+ (older `retain`/`events` keys are migrated on startup).
+# If recordings are ever deleted manually, set `sync_recordings: true` here
+# temporarily so Frigate drops the stale database entries.
+record:
+  enabled: true
+  motion:
+    days: {{ frigate_record_retain_days }}
+  alerts:
+    retain:
+      days: {{ frigate_record_retain_days }}
+      mode: active_objects
+  detections:
+    retain:
+      days: {{ frigate_record_retain_days }}
+      mode: active_objects
+ffmpeg:
+  hwaccel_args: preset-intel-qsv-h264
+birdseye:
+  enabled: false

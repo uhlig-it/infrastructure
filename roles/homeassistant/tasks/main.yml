@@ -1,0 +1,22 @@
+- name: Home Assistant directory exists
+  ansible.builtin.file:
+    path: /opt/homeassistant
+    state: directory
+    owner: suhlig
+    group: suhlig
+  become: true
+  tags: [ docker, homeassistant, directory ]
+- name: Home Assistant is running
+  community.docker.docker_container:
+    name: homeassistant
+    image: ghcr.io/home-assistant/home-assistant:stable
+    pull: true
+    state: started
+    detach: true
+    privileged: true
+    restart: true
+    restart_policy: always
+    env: { TZ: Europe/Berlin }
+    network_mode: host
+    volumes: [ /opt/homeassistant:/config ]
+  tags: [ docker, homeassistant, container ]

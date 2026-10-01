@@ -1,0 +1,23 @@
+---
+# Source: github.com/uhlig-it/env-sensors
+# The binary is built by CI and passed as service_binary (extra-var).
+# Per-host sensor addresses live in inventory/host_vars/{wordclock,shop}.yml.
+- name: Deploy the env-sensors exporter
+  hosts: wordclock:shop
+  become: true
+  roles:
+    - role: uhlig-it.simple_systemd_service
+      become: true
+      vars:
+        program:
+          name: env-sensors
+          description: Export sensor measurements for Prometheus
+          binary: "{{ service_binary }}"
+          parameters:
+            - --i2c-bus "{{ i2c_bus }}"
+            - --bme280-address "{{ bme280_address }}"
+            - "{% if tsl2561_address is defined %}--tsl2561-address {{ tsl2561_address }}{% endif %}"
+            - --location "{{ location }}"
+            - --bind-address "{{ inventory_hostname }}":9103
+            - --verbose
+      tags: [sensor, bme280, tsl2561, systemd, service]

@@ -1,0 +1,48 @@
+---
+# Source: github.com/uhlig-it/kehrkraft-deployment
+# Secrets (kehrkraft.fqdn, kehrkraft.port, admin creds, B2 backup settings)
+# live in the vault.
+- name: Deploy kehrkraft
+  hosts: neon
+  become: true
+  gather_facts: true
+  vars:
+    # Released as a tarball by kehrkraft's release workflow; adjust the tag to an
+    # existing GitHub release before deploying. v0.5.0 is the first release with
+    # the hourly S3 backup feature. The SHA-256 is that of the v0.5.1 asset.
+    service_binary: https://github.com/uhlig-it/kehrkraft/releases/download/v0.5.1/kehrkraft-linux-amd64.tar.gz
+    service_binary_checksum: sha256:4c4ec6f4f8e9d2a4062ec30b321e7529014183b825c9638fb0476f3456d824a9
+    data_dir: /var/lib/kehrkraft
+  roles:
+    - role: uhlig-it.simple_systemd_service
+      vars:
+        program:
+          name: kehrkraft
+          description: Kehrkraft web application
+          binary: "{{ service_binary }}"
+          binary_checksum: "{{ service_binary_checksum }}"
+          runtime_user: kehrkraft
+          data_dir: "{{ data_dir }}"
+          # Namespaced KEHRKRAFT_* names since kehrkraft v0.2.0; RUST_LOG is a
+          # tracing convention and intentionally stays unprefixed.
+          environment:
+            KEHRKRAFT_PORT: "{{ kehrkraft.port }}"
+            KEHRKRAFT_ADMIN_USER: "{{ kehrkraft.admin_user }}"
+            KEHRKRAFT_ADMIN_PASS: "{{ kehrkraft.admin_pass }}"
+            KEHRKRAFT_DATABASE_URL: "sqlite:{{ data_dir }}/kehrkraft.db"
+            KEHRKRAFT_PUBLIC_URL: "https://{{ kehrkraft.fqdn }}"
+            RUST_LOG: info
+            KEHRKRAFT_BACKUP_BUCKET: "{{ kehrkraft.backup_bucket }}"
+            KEHRKRAFT_BACKUP_ACCESS_KEY: "{{ kehrkraft.backup_access_key }}"
+            KEHRKRAFT_BACKUP_SECRET_KEY: "{{ kehrkraft.backup_secret_key }}"
+            KEHRKRAFT_BACKUP_PASSPHRASE: "{{ kehrkraft.backup_passphrase }}"
+            KEHRKRAFT_BACKUP_ENDPOINT: "{{ kehrkraft.backup_endpoint | default('') }}"
+            KEHRKRAFT_BACKUP_REGION: "{{ kehrkraft.backup_region | default('us-east-1') }}"
+            KEHRKRAFT_BACKUP_PREFIX: "{{ kehrkraft.backup_prefix | default('kehrkraft') }}"
+            KEHRKRAFT_BACKUP_MAX_AGE_HOURS: "{{ kehrkraft.backup_max_age_hours | default(26) }}"
+    - role: suhlig.caddy_reverse_proxy
+      become: true
+      vars:
+        caddy_domain: "{{ kehrkraft.fqdn }}"
+        caddy_port: "{{ kehrkraft.port }}"
+      tags: [caddy, proxy]

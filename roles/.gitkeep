@@ -1,0 +1,3 @@
+# Host-specific roles that are not shared library live here.
+# See plan.md for the list to migrate: frigate, gotosocial, victoriametrics,
+# the opus container roles, shop-watchdog, switchbot-mqtt, fadecandy, rails-puma.

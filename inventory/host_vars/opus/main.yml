@@ -1,0 +1,17 @@
+---
+ansible_user: suhlig
+
+# Home server: subnet router for the 192.168.10.0/24 LAN and the tailnet exit node.
+tailscale_args: --advertise-routes=192.168.10.0/24 --advertise-exit-node --accept-dns=false --accept-routes --operator=suhlig
+
+# Tailscale Services published from this host.
+tailscale_services:
+  - name: svc:ha
+    port: 443
+    backend: http://localhost:8123
+  - name: svc:unifi
+    port: 443
+    backend: https+insecure://localhost:8443
+  - name: svc:status
+    port: 443
+    backend: http://localhost:3001

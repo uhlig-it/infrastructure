@@ -1,0 +1,8 @@
+---
+ansible_user: suhlig
+
+# mediamtx camera (OV5647 sensor).
+rpiCameraTuningFile: /usr/share/libcamera/ipa/rpi/vc4/ov5647.json
+rpiCameraAfMode: auto
+rpiCameraTextOverlayEnable: true
+rpiCameraTextOverlay: "pi0 %Y-%m-%d %H:%M:%S"

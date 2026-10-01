@@ -1,0 +1,59 @@
+---
+# Source: github.com/uhlig-it/shorts
+# Fetches the released binary; bump shorts_version with the next `v*` tag.
+- name: Deploy the Shorts application
+  hosts: neon
+  become: true
+  gather_facts: true
+  vars:
+    shorts_version: v0.1.0
+    shorts_checksum_file: "/tmp/shorts-{{ shorts_version }}.sha256"
+  pre_tasks:
+    - name: Fetch the release's SHA-256 checksum (controller-side)
+      ansible.builtin.command:
+        cmd: >-
+          curl -fsSL --max-time 60 -o {{ shorts_checksum_file }}
+          https://github.com/uhlig-it/shorts/releases/download/{{ shorts_version }}/shorts-linux-amd64.tar.gz.sha256
+      delegate_to: localhost
+      become: false
+      changed_when: false
+      tags: [checksum]
+  tasks:
+    - name: Config file is present
+      become: true
+      ansible.builtin.copy:
+        src: "{{ playbook_dir }}/files/shorts.yml"
+        dest: /etc/shorts.yml
+        mode: "0644"
+      register: config_copied
+      tags: [shorts, yaml, config]
+    - name: Service is restarted
+      ansible.builtin.systemd:
+        name: shorts.service
+        state: restarted
+      when: config_copied.changed
+      tags: [systemd, service]
+  roles:
+    - role: uhlig-it.simple_systemd_service
+      become: true
+      vars:
+        program:
+          name: shorts
+          description: Shorts URL shortener
+          binary: >-
+            https://github.com/uhlig-it/shorts/releases/download/{{ shorts_version }}/shorts-linux-amd64.tar.gz
+          binary_checksum: >-
+            sha256:{{ (lookup('file', shorts_checksum_file) | trim | split(' '))[0] }}
+          runtime_user: shorts
+          parameters:
+            - -port
+            - "{{ shorts_port }}"
+            - -urls
+            - /etc/shorts.yml
+      tags: [shorts, url, shortener, systemd, service]
+    - role: suhlig.caddy_reverse_proxy
+      become: true
+      vars:
+        caddy_domain: "{{ shorts_fqdn }}"
+        caddy_port: "{{ shorts_port }}"
+      tags: [shorts, url, shortener, caddy, proxy]

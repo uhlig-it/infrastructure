@@ -1,0 +1,84 @@
+name: Deploy
+
+# Reusable workflow: application repos call this from their release workflow to
+# deploy a released artifact via the matching playbook in this repo.
+#
+#   deploy:
+#     needs: release
+#     uses: uhlig-it/infrastructure/.github/workflows/deploy.yml@main
+#     with:
+#       service: mqtt-router
+#     secrets: inherit
+#
+# The caller must define the `vault_password` secret. The SSH deploy key is read
+# from the vault (`github.ssh_key`), so no separate `ssh_key` secret is needed.
+on:
+  workflow_call:
+    inputs:
+      service:
+        description: Service playbook under playbooks/services/ (without .yml)
+        required: true
+        type: string
+      ref:
+        description: Infrastructure ref to deploy from
+        required: false
+        type: string
+        default: main
+    secrets:
+      vault_password:
+        description: Ansible vault password
+        required: true
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    env:
+      ANSIBLE_HOST_KEY_CHECKING: "False"
+    steps:
+      - name: Check out the application repo
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # actions/checkout@v7
+        with:
+          path: app
+      - name: Check out the infrastructure repo
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # actions/checkout@v7
+        with:
+          repository: uhlig-it/infrastructure
+          ref: ${{ inputs.ref }}
+          path: infrastructure
+      - name: Set up Go
+        # Only needed by services whose playbook builds from source.
+        if: ${{ hashFiles('app/go.mod') != '' }}
+        uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # actions/setup-go@v5
+        with:
+          go-version-file: app/go.mod
+      - name: Install goreleaser
+        if: ${{ hashFiles('app/go.mod') != '' }}
+        run: go install github.com/goreleaser/goreleaser/v2@latest
+      - name: Install Ansible
+        run: |
+          python3 -m venv /tmp/ansible
+          /tmp/ansible/bin/pip install ansible-core
+      - name: Install collections and roles
+        working-directory: infrastructure
+        run: /tmp/ansible/bin/ansible-galaxy install -r requirements.yml
+      - name: Write the vault password
+        run: printf '%s\n' "${{ secrets.vault_password }}" > "${{ github.workspace }}/.vault-password"
+      - name: Extract the SSH deploy key from the vault
+        working-directory: infrastructure
+        env:
+          ANSIBLE_VAULT_PASSWORD_FILE: ${{ github.workspace }}/.vault-password
+        run: |
+          mkdir -p ~/.ssh
+          /tmp/ansible/bin/ansible-vault view inventory/group_vars/all/secrets.yml \
+            | /tmp/ansible/bin/python -c "import sys, yaml; sys.stdout.write(yaml.safe_load(sys.stdin)['github']['ssh_key'])" \
+            > ~/.ssh/id_rsa
+          chmod 600 ~/.ssh/id_rsa
+      - name: Deploy
+        working-directory: infrastructure
+        env:
+          # Ansible reads the vault password from this file.
+          ANSIBLE_VAULT_PASSWORD_FILE: ${{ github.workspace }}/.vault-password
+        run: |
+          /tmp/ansible/bin/ansible-playbook \
+            -e "app_source=${{ github.workspace }}/app" \
+            "playbooks/services/${{ inputs.service }}.yml"

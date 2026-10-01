@@ -1,0 +1,2 @@
+- include_tasks: roles/wordclock/bundle.yml
+- include_tasks: roles/wordclock/launch.yml

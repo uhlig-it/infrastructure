@@ -1,0 +1,6 @@
+---
+ansible_user: suhlig
+
+# env-sensors
+bme280_address: "0x77"
+location: wohnzimmer

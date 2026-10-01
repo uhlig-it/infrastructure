@@ -1,0 +1,13 @@
+gts_version: "0.22.1"
+gts_service_name: gotosocial
+gts_runtime_user: "{{ gts_service_name }}"
+gts_runtime_group: "{{ gts_service_name }}"
+gts_runtime_directory: "/opt/{{ gts_service_name }}/db"
+gts_bin_directory: "/opt/{{ gts_service_name }}"
+gts_config_path: /etc/{{ gts_service_name }}.yaml
+gts_db_path: "{{ gts_runtime_directory }}/{{ gts_service_name }}.db"
+gts_log_directory: "/var/log/{{ gts_service_name }}"
+gts_metrics_enabled: false
+gts_metrics_auth_enabled: false
+gts_metrics_auth_username:
+gts_metrics_auth_password:

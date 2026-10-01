@@ -1,0 +1,58 @@
+---
+# Source: github.com/uhlig-it/tasmota-firmware-proxy
+# Builds the binary from the app checkout (app_source) on the controller.
+- name: Deploy the Tasmota Firmware Proxy
+  hosts: opus:shop
+  become: true
+  gather_facts: true
+  vars:
+    deb_architectures:
+      armv6l: arm
+      armv7l: arm
+      aarch64: arm64
+      x86_64: amd64
+      i386: i386
+    listen_address: :3333
+    goos: linux
+    goarch: "{{ deb_architectures[ansible_facts['architecture']] }}"
+  pre_tasks:
+    - name: Go modules are downloaded
+      ansible.builtin.command:
+        cmd: go mod download
+        chdir: "{{ app_source }}"
+      delegate_to: localhost
+      become: false
+      tags: [binary, build]
+    - name: tasmota-firmware-proxy release binary is built
+      ansible.builtin.command:
+        cmd: >-
+          make release GOOS={{ goos }} GOARCH={{ goarch }}
+        chdir: "{{ app_source }}"
+      delegate_to: localhost
+      become: false
+      tags: [binary, build]
+    - name: Binary output path is determined
+      ansible.builtin.command:
+        cmd: make output-path GOOS={{ goos }} GOARCH={{ goarch }}
+        chdir: "{{ app_source }}"
+      delegate_to: localhost
+      register: output_path_result
+      become: false
+      tags: [binary, path]
+    - name: Path to binary is set
+      ansible.builtin.set_fact:
+        binary_path: "{{ output_path_result.stdout }}"
+      tags: [binary, path]
+  roles:
+    - role: uhlig-it.simple_systemd_service
+      vars:
+        program:
+          name: tasmota-firmware-proxy
+          binary: "{{ app_source }}/{{ binary_path }}"
+          description: Tasmota Firmware Proxy
+          runtime_user: tasmota-firmware-proxy
+          parameters:
+            - https://s3.us-west-001.backblazeb2.com/uhlig-it-tasmota-builds/
+            - --log-level debug
+            - --address "{{ listen_address }}"
+      become: true

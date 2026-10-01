@@ -1,0 +1,2 @@
+inventory/group_vars/all/secrets.yml diff=ansible-vault merge=binary
+inventory/host_vars/*/secrets.yml diff=ansible-vault merge=binary

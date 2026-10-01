@@ -1,0 +1,83 @@
+# VictoriaMetrics single-node: binary, systemd unit, scrape config, dashboards.
+
+- name: Installed version is checked
+  command: "{{ victoriametrics_binary_path }} -version"
+  register: victoriametrics_installed_version
+  changed_when: false
+  failed_when: false
+  tags: [ install ]
+
+- name: Release archive is downloaded
+  get_url:
+    url: "https://github.com/VictoriaMetrics/VictoriaMetrics/releases/download/v{{ victoriametrics_version }}/victoria-metrics-linux-amd64-v{{ victoriametrics_version }}.tar.gz"
+    dest: "/tmp/victoria-metrics-v{{ victoriametrics_version }}.tar.gz"
+    checksum: "{{ victoriametrics_checksum }}"
+    mode: "0644"
+  when: victoriametrics_version not in (victoriametrics_installed_version.stdout | default(''))
+  tags: [ install ]
+
+- name: Release archive is extracted
+  unarchive:
+    src: "/tmp/victoria-metrics-v{{ victoriametrics_version }}.tar.gz"
+    dest: /tmp
+    remote_src: true
+  when: victoriametrics_version not in (victoriametrics_installed_version.stdout | default(''))
+  tags: [ install ]
+
+- name: Binary is installed
+  copy:
+    src: /tmp/victoria-metrics-prod
+    dest: "{{ victoriametrics_binary_path }}"
+    owner: root
+    group: root
+    mode: "0755"
+    remote_src: true
+  when: victoriametrics_version not in (victoriametrics_installed_version.stdout | default(''))
+  notify: victoria-metrics restarted
+  tags: [ install ]
+
+- name: Scrape configuration is rendered
+  template:
+    src: victoriametrics/prometheus.yml.j2
+    dest: "{{ victoriametrics_config_dir }}/prometheus.yml"
+    owner: root
+    group: victoriametrics
+    mode: "0640"
+  tags: [ configuration, security ]
+  # No restart needed: -promscrape.configCheckInterval picks changes up.
+
+- name: Environment file is rendered
+  template:
+    src: victoriametrics/env.j2
+    dest: "{{ victoriametrics_config_dir }}/env"
+    owner: root
+    group: root
+    mode: "0600"
+  notify: victoria-metrics restarted
+  tags: [ configuration, security ]
+
+- name: Dashboards are installed
+  copy:
+    src: dashboards/
+    dest: "{{ victoriametrics_dashboards_dir }}/"
+    owner: root
+    group: root
+    mode: "0644"
+  tags: [ configuration, dashboards ]
+
+- name: systemd unit is installed
+  template:
+    src: victoriametrics/victoria-metrics.service.j2
+    dest: /etc/systemd/system/victoria-metrics.service
+    owner: root
+    group: root
+    mode: "0644"
+  notify: victoria-metrics restarted
+  tags: [ systemd, service ]
+
+- name: VictoriaMetrics is started
+  service:
+    name: victoria-metrics
+    state: started
+    enabled: true
+  tags: [ systemd, service ]

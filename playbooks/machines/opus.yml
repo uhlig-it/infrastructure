@@ -1,0 +1,56 @@
+---
+# Source: github.com/uhlig-it/opus
+# Tailscale is configured by playbooks/fleet/tailscale.yml.
+# TODO: migrate the local container roles into roles/:
+#       homeassistant, unifi, mosquitto, pi-hole, watchtower, uptime-kuma.
+- name: opus home server
+  hosts: opus
+  collections:
+    - thorian93.main
+    - suhlig.foundation
+  roles:
+    - role: thorian93.main.upgrade
+      become: true
+    - role: thorian93.main.journald
+      become: true
+    - role: thorian93.main.common
+      vars:
+        common_configure_timezone: true
+        common_timezone: "{{ timezone }}"
+      become: true
+    - role: thorian93.main.ntp
+      become: true
+    - role: suhlig.foundation.main
+      become: true
+    - role: geerlingguy.docker
+      become: true
+      vars: { docker_users: [suhlig] }
+      tags: [docker]
+    - role: homeassistant
+      become: true
+      tags: [docker, homeassistant, container]
+    - role: unifi
+      become: true
+      tags: [docker, container, unifi]
+    - role: mosquitto
+      become: true
+      tags: [mosquitto, mqtt]
+    - role: uhlig-it.duckdns
+      become: true
+      tags: [dns, duckdns, network, dhcp]
+    - role: uhlig-it.home-assistant-backup-b2
+      vars: { timers: [OnCalendar=daily] }
+      become: true
+      tags: [backup, service, timer]
+    - role: suhlig.foundation.speedtest
+      become: true
+      tags: [speedtest, metrics]
+    - role: pi-hole
+      become: true
+      tags: [docker, pi-hole, container]
+    - role: watchtower
+      become: true
+      tags: [docker, watchtower, container]
+    - role: uptime-kuma
+      become: true
+      tags: [docker, uptime-kuma, container]

@@ -1,0 +1,6 @@
+*.retry
+.vault-password
+inventory/group_vars/all/secrets.yml
+inventory/host_vars/*/secrets.yml
+__pycache__/
+*.pyc

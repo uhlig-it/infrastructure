@@ -1,0 +1,21 @@
+---
+# Fleet-wide defaults.
+timezone: Europe/Berlin
+
+# Tailscale defaults. Per-host overrides live in inventory/host_vars/.
+tailscale_up_skip: true
+tailscale_args: --accept-routes
+
+# Root of this repo, for referencing role files from playbooks.
+infrastructure_root: "{{ inventory_dir }}/.."
+
+# Path to the application source checkout for deploys that build from source
+# (wordclock, meal-tracker, speisehof, nowak-reisen, mqtt-router,
+# speedtest-exporter, tasmota-firmware-proxy, mqtt-gpio-binary-sensor).
+# CI passes this as an extra-var; locally, point it at the app repo.
+app_source: ""
+
+# Service defaults.
+i2c_bus: 1
+metrics:
+  port: 9104

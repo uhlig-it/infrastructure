@@ -1,0 +1,13 @@
+[Unit]
+Description=Disable WiFi powersave and set regulatory domain
+# brcmfmac powersave is a common cause of flaky Raspberry Pi wireless.
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+ExecStart=/sbin/iw dev wlan0 set power_save off
+ExecStart=/sbin/iw reg set DE
+
+[Install]
+WantedBy=multi-user.target
