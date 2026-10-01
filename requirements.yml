@@ -2,7 +2,11 @@
 # Every collection and role used anywhere in this repo.
 # Install with: ansible-galaxy install -r requirements.yml
 collections:
-  - name: suhlig.foundation
+  # Installed from git, not Galaxy: the roles the playbooks use
+  # (tailscale_service, log2ram, ...) are newer than the published 1.2.2.
+  - name: https://github.com/suhlig/foundation.git
+    type: git
+    version: main
   - name: thorian93.main
   - name: ansible.posix
   - name: community.crypto
