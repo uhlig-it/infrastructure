@@ -13,8 +13,6 @@ collections:
   - name: community.docker
   - name: community.general
   - name: community.postgresql
-  # Dependency of suhlig.foundation.minimal (unattended_upgrades).
-  - name: hifis.toolkit
   - name: prometheus.prometheus
     version: ">=0.30.1,<3.0.0"
 
