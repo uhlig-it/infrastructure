@@ -1,12 +1,25 @@
 ---
-# Source: github.com/uhlig-it/{kehrkraft-deployment,uhlig.social-deployment,www}
-# neon is a Hetzner server. It has no dedicated baseline playbook today;
-# its software is deployed by playbooks/services/*.yml.
-# TODO: decide whether neon needs a baseline (Caddy, journald, upgrades).
+# Source: Hetzner server created manually via the Hetzner console (2022); it is
+# NOT managed by Terraform (uhlig-it/inventory provisions only `soda`).
+# Tailscale is configured by playbooks/fleet/tailscale.yml.
+# Caddy is installed on the host and its per-domain site files are written by
+# the service playbooks; it is not managed here.
 - name: neon server baseline
   hosts: neon
-  tasks:
-    - name: Placeholder
-      ansible.builtin.debug:
-        msg: "neon baseline not yet defined"
-      changed_when: false
+  collections:
+    - thorian93.main
+    - suhlig.foundation
+  roles:
+    - role: thorian93.main.upgrade
+      become: true
+    - role: thorian93.main.journald
+      become: true
+    - role: thorian93.main.common
+      vars:
+        common_configure_timezone: true
+        common_timezone: "{{ timezone }}"
+      become: true
+    - role: thorian93.main.ntp
+      become: true
+    - role: suhlig.foundation.main
+      become: true

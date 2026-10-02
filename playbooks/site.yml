@@ -28,4 +28,3 @@
 - import_playbook: services/www.yml
 - import_playbook: services/speisehof.yml
 - import_playbook: services/nowak-reisen.yml
-- import_playbook: services/meal-tracker.yml
