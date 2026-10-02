@@ -25,7 +25,6 @@
 - import_playbook: services/tasmota-firmware-proxy.yml
 - import_playbook: services/speedtest-exporter.yml
 - import_playbook: services/shorts.yml
-- import_playbook: services/youtube-likes-feed.yml
 - import_playbook: services/www.yml
 - import_playbook: services/speisehof.yml
 - import_playbook: services/nowak-reisen.yml
