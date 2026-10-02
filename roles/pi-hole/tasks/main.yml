@@ -21,7 +21,7 @@
     restart_policy: always
     env:
       TZ: Europe/Berlin
-      WEBPASSWORD: Klabautermönchsgardine
+      WEBPASSWORD: "{{ pi_hole_webpassword }}"
     ports:
       - "53:53/tcp" # DNS
       - "53:53/udp" # DNS
