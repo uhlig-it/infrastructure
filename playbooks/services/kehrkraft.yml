@@ -9,9 +9,9 @@
   vars:
     # Released as a tarball by kehrkraft's release workflow; adjust the tag to an
     # existing GitHub release before deploying. v0.5.0 is the first release with
-    # the hourly S3 backup feature. The SHA-256 is that of the v0.5.1 asset.
-    service_binary: https://github.com/uhlig-it/kehrkraft/releases/download/v0.5.1/kehrkraft-linux-amd64.tar.gz
-    service_binary_checksum: sha256:4c4ec6f4f8e9d2a4062ec30b321e7529014183b825c9638fb0476f3456d824a9
+    # the hourly S3 backup feature. The SHA-256 is that of the v0.6.0 asset.
+    service_binary: https://github.com/uhlig-it/kehrkraft/releases/download/v0.6.0/kehrkraft-linux-amd64.tar.gz
+    service_binary_checksum: sha256:27c185c61d39024af70df216d8619e852cdd09778ef7f99eb4bb8ec163e7dadb
     data_dir: /var/lib/kehrkraft
   roles:
     - role: uhlig-it.simple_systemd_service
