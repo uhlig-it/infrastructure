@@ -1,0 +1,12 @@
+## Mount-namespace metric -----------------------------------------------------
+
+# Directory read by the node_exporter textfile collector. Defaults to the
+# value used by the prometheus.prometheus.node_exporter role.
+mountinfo_metric_dir: "{{ node_exporter_textfile_dir | default('/var/lib/node_exporter') }}"
+
+# The script that refreshes the metric file.
+mountinfo_metric_script: /usr/local/bin/mountinfo-metric
+
+# How often the metric is refreshed. node_exporter reports the last written
+# value, so this bounds how stale a scrape can be.
+mountinfo_metric_interval: 30s

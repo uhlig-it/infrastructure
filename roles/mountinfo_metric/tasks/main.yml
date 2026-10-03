@@ -1,0 +1,39 @@
+- name: Textfile collector directory exists
+  ansible.builtin.file:
+    path: "{{ mountinfo_metric_dir }}"
+    state: directory
+    mode: "0755"
+
+- name: Metric script is installed
+  ansible.builtin.template:
+    src: mountinfo_metric.sh.j2
+    dest: "{{ mountinfo_metric_script }}"
+    owner: root
+    group: root
+    mode: "0755"
+  notify: mountinfo metric is refreshed
+
+- name: Service unit is installed
+  ansible.builtin.template:
+    src: mountinfo-metric.service.j2
+    dest: /etc/systemd/system/mountinfo-metric.service
+    owner: root
+    group: root
+    mode: "0644"
+  notify: systemd is reloaded
+
+- name: Timer unit is installed
+  ansible.builtin.template:
+    src: mountinfo-metric.timer.j2
+    dest: /etc/systemd/system/mountinfo-metric.timer
+    owner: root
+    group: root
+    mode: "0644"
+  notify: systemd is reloaded
+
+- name: Timer is enabled and running
+  ansible.builtin.systemd:
+    name: mountinfo-metric.timer
+    enabled: true
+    state: started
+    daemon_reload: true

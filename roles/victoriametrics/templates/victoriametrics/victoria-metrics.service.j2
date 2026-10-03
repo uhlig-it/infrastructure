@@ -24,6 +24,7 @@ ExecStart={{ victoriametrics_binary_path }} \
   -promscrape.config={{ victoriametrics_config_dir }}/prometheus.yml \
   -promscrape.configCheckInterval=1m \
   -vmui.customDashboardsPath={{ victoriametrics_dashboards_dir }} \
+  -memory.allowedBytes={{ victoriametrics_memory_allowed_bytes }} \
   -envflag.enable -envflag.prefix=VM_
 
 # Sandboxing. Deliberately NOT set:
@@ -58,7 +59,15 @@ CapabilityBoundingSet=
 RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
 LimitNOFILE=1048576
 
+# Keep reclaim inside this unit rather than letting the caches exhaust the host
+# and trigger a global OOM that also kills Concourse.
+MemoryHigh={{ victoriametrics_memory_high }}
+MemoryMax={{ victoriametrics_memory_max }}
+
 Restart=always
+# RestartUSec defaulted to 100ms, which re-warmed the caches immediately and
+# fed the OOM loop; give the host time to recover between restarts.
+RestartSec={{ victoriametrics_restart_sec }}
 
 [Install]
 WantedBy=multi-user.target

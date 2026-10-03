@@ -1,0 +1,10 @@
+[Unit]
+Description=Periodically refresh the mountinfo_entries textfile metric
+
+[Timer]
+OnBootSec=2min
+OnUnitActiveSec={{ mountinfo_metric_interval }}
+AccuracySec=5s
+
+[Install]
+WantedBy=timers.target

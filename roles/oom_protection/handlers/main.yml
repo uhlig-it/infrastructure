@@ -1,0 +1,8 @@
+- name: restart oom-protected services
+  ansible.builtin.systemd:
+    name: "{{ item.name }}"
+    state: restarted
+    daemon_reload: true
+  loop: "{{ oom_protection_services }}"
+  loop_control:
+    label: "{{ item.name }}"

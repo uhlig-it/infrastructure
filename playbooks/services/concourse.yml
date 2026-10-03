@@ -30,6 +30,11 @@
             owner: "{{ concourse_postgres_user }}"
       become: true
       tags: [concourse, db, postgres]
+    # Postgres is deliberately not listed in oom_protection: Ubuntu ships
+    # postgresql@.service with OOMScoreAdjust=-900 already, which is stronger
+    # than the -300 the plan suggested, and re-listing it would both weaken it
+    # and needlessly restart the database. Concourse web and worker below are
+    # the services that need shielding.
 
 - name: Deploy Concourse web
   hosts: atc
@@ -37,12 +42,24 @@
     - role: suhlig.concourse
       become: true
       vars:
+        # 8.3.1 fixes the baggageclaim overlay driver stacking mounts on worker
+        # restart (concourse/concourse#9723), which exhausted the mount table
+        # on soda. Keep web and worker on the same version.
+        concourse_version: 8.3.1
+        concourse_archive_checksum: "sha1:88334a77b1606568478e428bac2d835ce0001547"
         concourse_web: true
         concourse_external_url: https://concourse.tailnet-204f.ts.net
         concourse_web_env:
           CONCOURSE_BIND_PORT: 8080
           CONCOURSE_BIND_IP: 127.0.0.1
       tags: [concourse, web]
+    # If memory spikes, kill one of our own services before the CI system.
+    - role: oom_protection
+      become: true
+      vars:
+        oom_protection_services:
+          - { name: concourse-web, adjust: -500 }
+      tags: [concourse, web, oom]
     - role: suhlig.foundation.tailscale_service
       become: true
       vars:
@@ -57,9 +74,19 @@
     - role: suhlig.concourse
       become: true
       vars:
+        concourse_version: 8.3.1
+        concourse_archive_checksum: "sha1:88334a77b1606568478e428bac2d835ce0001547"
         concourse_worker: true
         concourse_tsa_host: soda:2222
         concourse_work_dir: /mnt/concourse-worker-dir
         concourse_worker_env:
           CONCOURSE_CONTAINERD_DNS_SERVER: 100.100.100.100,9.9.9.9
       tags: [concourse, worker]
+    # The worker forks the build containers; keep it out of the OOM killer's
+    # way so builds aren't aborted.
+    - role: oom_protection
+      become: true
+      vars:
+        oom_protection_services:
+          - { name: concourse-worker, adjust: -500 }
+      tags: [concourse, worker, oom]

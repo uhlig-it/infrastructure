@@ -24,6 +24,24 @@ victoriametrics_http_listen_addr: 127.0.0.1:8428
 victoriametrics_self_scrape_interval: 10s
 victoriametrics_scrape_interval: 30s
 
+## Memory budget ---------------------------------------------------------------
+
+# Absolute cache budget. On a shared box the default -memory.allowedPercent=60
+# let the caches grow to ~4.5 GiB and starve Concourse and Postgres (soda OOM
+# incident, 2026-10-03). An absolute value cannot silently scale back up on a
+# small host the way the percentage default did; 1.2 GB of data and seven
+# scrape jobs do not need a multi-gigabyte cache.
+victoriametrics_memory_allowed_bytes: 1500MB
+
+# cgroup ceiling so a spike is reclaimed inside the unit instead of triggering
+# a host-wide OOM kill that also takes down Concourse.
+victoriametrics_memory_high: 1400M
+victoriametrics_memory_max: 1800M
+
+# The previous default RestartUSec=100ms re-warmed the caches immediately and
+# fed the OOM loop; give the host time to recover between restarts.
+victoriametrics_restart_sec: 10
+
 ## Basic auth ------------------------------------------------------------------
 
 # HTTP endpoints incl. vmui; leave the password empty to disable auth.

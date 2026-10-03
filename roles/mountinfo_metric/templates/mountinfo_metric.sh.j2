@@ -1,0 +1,29 @@
+#!/bin/sh
+# Refresh the node_exporter textfile metric for the number of entries in this
+# mount namespace. The file is written atomically (temp file + rename) so a
+# scrape never reads a partially written file.
+#
+# Why this exists: when a mount namespace reaches /proc/sys/fs/mount-max,
+# every mount() fails with ENOSPC and systemd units that need mount
+# namespacing start failing to start. Watching this value catches exhaustion
+# long before it wedges the host.
+set -eu
+
+dir="{{ mountinfo_metric_dir }}"
+[ -d "$dir" ] || mkdir -p "$dir"
+
+# Leading dot and .tmp suffix so the textfile collector never picks up the
+# temp file, under either of its file-name filters.
+tmp="$(mktemp "$dir/.mountinfo_entries.XXXXXX.tmp")"
+trap 'rm -f "$tmp"' EXIT
+
+count="$(wc -l < /proc/self/mountinfo)"
+
+{
+    printf '# HELP mountinfo_entries Number of entries in /proc/self/mountinfo (this mount namespace).\n'
+    printf '# TYPE mountinfo_entries gauge\n'
+    printf 'mountinfo_entries %s\n' "$count"
+} > "$tmp"
+
+chmod 0644 "$tmp"
+mv "$tmp" "$dir/mountinfo_entries.prom"

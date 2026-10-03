@@ -13,6 +13,7 @@
 - import_playbook: machines/shop.yml
 - import_playbook: machines/wordclock.yml
 - import_playbook: machines/neon.yml
+- import_playbook: machines/soda.yml
 
 - import_playbook: services/kehrkraft.yml
 - import_playbook: services/gotosocial.yml

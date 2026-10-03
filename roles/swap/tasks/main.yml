@@ -1,0 +1,63 @@
+- name: Active swap devices are listed
+  ansible.builtin.command:
+    cmd: swapon --show=NAME --noheadings
+  register: swap_devices
+  changed_when: false
+  check_mode: false
+
+- name: Swap files are created
+  ansible.builtin.command:
+    cmd: dd if=/dev/zero of={{ item.path }} bs=1M count={{ item.size_mb }}
+    creates: "{{ item.path }}"
+  loop: "{{ swap_files }}"
+  loop_control:
+    label: "{{ item.path }}"
+  # dd rather than fallocate: a sparse file cannot be used as swap on all
+  # filesystems, and each file is created only once (guarded by `creates`).
+
+- name: Swap files have restrictive permissions
+  ansible.builtin.file:
+    path: "{{ item.path }}"
+    owner: root
+    group: root
+    mode: "0600"
+  loop: "{{ swap_files }}"
+  loop_control:
+    label: "{{ item.path }}"
+
+- name: Swap files are formatted
+  ansible.builtin.command:
+    cmd: mkswap {{ item.path }}
+  when: item.path not in swap_devices.stdout
+  loop: "{{ swap_files }}"
+  loop_control:
+    label: "{{ item.path }}"
+
+- name: Swap files are activated
+  ansible.builtin.command:
+    cmd: swapon {{ item.path }}
+  when: item.path not in swap_devices.stdout
+  loop: "{{ swap_files }}"
+  loop_control:
+    label: "{{ item.path }}"
+
+- name: Swap files are enabled at boot
+  # lineinfile rather than ansible.posix.mount: every swap entry has the mount
+  # point "none", so the mount module cannot key on the source path and would
+  # consider the second file already present.
+  ansible.builtin.lineinfile:
+    path: /etc/fstab
+    regexp: "^{{ item.path | regex_escape }}\\s"
+    line: "{{ item.path }} none swap sw 0 0"
+    state: present
+  loop: "{{ swap_files }}"
+  loop_control:
+    label: "{{ item.path }}"
+
+- name: Swappiness is configured
+  ansible.posix.sysctl:
+    name: vm.swappiness
+    value: "{{ swap_swappiness }}"
+    sysctl_file: /etc/sysctl.d/99-swap.conf
+    state: present
+    reload: true

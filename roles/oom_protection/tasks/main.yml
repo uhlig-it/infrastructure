@@ -1,0 +1,24 @@
+- name: OOM-score drop-in directories exist
+  ansible.builtin.file:
+    path: "/etc/systemd/system/{{ item.name }}.service.d"
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+  loop: "{{ oom_protection_services }}"
+  loop_control:
+    label: "{{ item.name }}"
+
+- name: OOM-score drop-ins are installed
+  ansible.builtin.copy:
+    dest: "/etc/systemd/system/{{ item.name }}.service.d/{{ oom_protection_dropin_name }}"
+    content: |
+      [Service]
+      OOMScoreAdjust={{ item.adjust }}
+    owner: root
+    group: root
+    mode: "0644"
+  loop: "{{ oom_protection_services }}"
+  loop_control:
+    label: "{{ item.name }}"
+  notify: restart oom-protected services

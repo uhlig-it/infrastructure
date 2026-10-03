@@ -48,4 +48,6 @@
       vars:
         node_exporter_basic_auth_users:
           prometheus: "{{ node_exporter_password }}"
+    # Exposes mountinfo_entries so mount-table exhaustion is visible.
+    - role: mountinfo_metric
   tags: [node-exporter]

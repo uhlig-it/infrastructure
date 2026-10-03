@@ -1,0 +1,9 @@
+## OOM protection -------------------------------------------------------------
+
+# Services to shield from (or expose to) the OOM killer, as
+# {name: <unit>, adjust: <OOMScoreAdjust>}. A negative value makes the kernel
+# prefer another process when memory runs out; systemd applies the value when it
+# starts the unit, so changing it restarts the affected service.
+oom_protection_services: []
+
+oom_protection_dropin_name: 10-oom-score.conf

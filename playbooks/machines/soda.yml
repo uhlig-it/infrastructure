@@ -1,0 +1,10 @@
+---
+# soda server baseline. Concourse (web + worker + Postgres) and VictoriaMetrics
+# are deployed by playbooks/services/concourse.yml and playbooks/fleet/metrics.yml.
+- name: soda server baseline
+  hosts: soda
+  roles:
+    # Adds a swap file so memory spikes don't push the OOM killer onto
+    # concourse and victoria-metrics.
+    - role: swap
+      become: true

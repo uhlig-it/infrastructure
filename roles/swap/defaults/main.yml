@@ -1,0 +1,19 @@
+## Swap ----------------------------------------------------------------------
+
+# One or more swap files, as {path, size_mb}. They live on the root volume; the
+# Concourse worker's data lives on a separate Hetzner volume.
+#
+# soda has ~8 GB RAM and its 4 GiB swap file filled up during the 2026-10-03
+# OOM loop, so a second 4 GiB file brings the total to 8 GiB. A second file is
+# safer than resizing the live one, which needs swapoff under memory pressure.
+swap_files:
+  - path: /swapfile
+    size_mb: 4096
+  - path: /swapfile2
+    size_mb: 4096
+
+# Moderate swappiness: prefer reclaiming page cache over swapping out service
+# memory, but allow enough swap-out to ride out a spike before the OOM killer
+# fires. Higher thrashes this single-disk box, which is what produced the
+# `context deadline exceeded` scrape failures during the incident.
+swap_swappiness: 30

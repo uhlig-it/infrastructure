@@ -53,6 +53,9 @@
     owner: root
     group: root
     mode: "0600"
+  # The file holds VM_httpAuth_password in cleartext (an EnvironmentFile cannot
+  # decrypt the vault), so keep it out of the Ansible log and diff output.
+  no_log: true
   notify: victoria-metrics restarted
   tags: [ configuration, security ]
 

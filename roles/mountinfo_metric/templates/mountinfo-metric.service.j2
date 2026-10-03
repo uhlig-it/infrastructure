@@ -1,0 +1,6 @@
+[Unit]
+Description=Write the mount-namespace entry count for the node_exporter textfile collector
+
+[Service]
+Type=oneshot
+ExecStart={{ mountinfo_metric_script }}

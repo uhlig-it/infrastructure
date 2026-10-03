@@ -1,0 +1,8 @@
+- name: systemd is reloaded
+  ansible.builtin.systemd:
+    daemon_reload: true
+
+- name: mountinfo metric is refreshed
+  ansible.builtin.systemd:
+    name: mountinfo-metric.service
+    state: restarted
