@@ -7,4 +7,6 @@ ansible_user: root
 # lib/tasks/ansible/ssh-known-hosts extracts ._meta.hostvars.*.public_key and
 # writes it to ssh-config/known_hosts, so the deploy can SSH without prompting.
 # Carried over from www/deployment/inventory.yml when the playbook moved here.
-public_key: "neon ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIJqkwDGxT2Apytq3QAhyiMVWnW7nFTlzGOhf5RuyRY/A"
+# Both the short MagicDNS name and the FQDN are listed: the SSH client
+# canonicalizes `neon` to `neon.tailnet-204f.ts.net` for the known_hosts lookup.
+public_key: "neon,neon.tailnet-204f.ts.net ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIJqkwDGxT2Apytq3QAhyiMVWnW7nFTlzGOhf5RuyRY/A"
