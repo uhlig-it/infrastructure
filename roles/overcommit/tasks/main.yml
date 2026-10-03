@@ -1,0 +1,13 @@
+- name: Commit-limit sysctls are configured
+  ansible.posix.sysctl:
+    name: "{{ item.name }}"
+    value: "{{ item.value }}"
+    sysctl_file: "{{ overcommit_sysctl_file }}"
+    sysctl_set: true
+    state: present
+    reload: true
+  loop:
+    - { name: vm.overcommit_memory, value: "{{ overcommit_memory }}" }
+    - { name: vm.overcommit_ratio, value: "{{ overcommit_ratio }}" }
+  loop_control:
+    label: "{{ item.name }}"

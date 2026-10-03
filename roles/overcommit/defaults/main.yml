@@ -1,0 +1,17 @@
+## Kernel commit limit --------------------------------------------------------
+
+# Enforce a commit limit so the kernel refuses allocations it cannot back with
+# RAM+swap, instead of over-committing and then OOM-killing a service. On soda,
+# Committed_AS already exceeded CommitLimit while the box was idle.
+#
+# CommitLimit = SwapTotal + MemTotal * overcommit_ratio/100. With overcommit_ratio
+# 100 and the 8 GiB of swap the swap role provides, the limit is ~15.6 GiB,
+# roughly double the observed Committed_AS, so there is headroom. Do not lower
+# the ratio without measuring peak commit: Go and Postgres reserve generously,
+# and with mode 2 a reservation that exceeds the limit fails the allocation.
+#
+# This is the riskiest part of the soda RAM fix, so it lives in its own role:
+# dropping `overcommit` from the machine playbook reverts it on its own.
+overcommit_memory: 2
+overcommit_ratio: 100
+overcommit_sysctl_file: /etc/sysctl.d/99-overcommit.conf

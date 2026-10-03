@@ -8,3 +8,7 @@
     # concourse and victoria-metrics.
     - role: swap
       become: true
+    # Enforces a commit limit so the kernel refuses over-committed allocations
+    # instead of OOM-killing a service. Revert by dropping this role.
+    - role: overcommit
+      become: true
