@@ -6,6 +6,10 @@ gpio_pin: GPIO4
 
 # The GPIO4 PIR sensor benefits from the transition history in Home Assistant.
 mqtt_gpio_binary_sensor_event_sensor: true
+mqtt_gpio_binary_sensor_name: Motion
+
+# A PIR latches, so Home Assistant resets the entity 30 seconds after the last motion.
+mqtt_gpio_binary_sensor_off_delay: 30s
 
 # gantsign.golang
 golang_version: "1.26.2"
