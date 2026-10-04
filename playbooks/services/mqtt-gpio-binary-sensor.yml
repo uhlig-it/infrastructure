@@ -69,7 +69,8 @@
           parameters: "{{ ['--pin \"' ~ gpio_pin ~ '\"', '--verbose']
             + (['--event-sensor'] if (mqtt_gpio_binary_sensor_event_sensor | default(false) | bool) else [])
             + (['--name \"' ~ mqtt_gpio_binary_sensor_name ~ '\"'] if ((mqtt_gpio_binary_sensor_name | default('')) | length > 0) else [])
-            + (['--off-delay ' ~ mqtt_gpio_binary_sensor_off_delay] if ((mqtt_gpio_binary_sensor_off_delay | default('')) | length > 0) else []) }}"
+            + (['--off-delay ' ~ mqtt_gpio_binary_sensor_off_delay] if ((mqtt_gpio_binary_sensor_off_delay | default('')) | length > 0) else [])
+            + (['--device-class ' ~ mqtt_gpio_binary_sensor_device_class] if ((mqtt_gpio_binary_sensor_device_class | default('')) | length > 0) else []) }}"
           description: GPIO to MQTT Publisher
           runtime_user: mqtt-gpio-binary-sensor
           groups: [gpio]
