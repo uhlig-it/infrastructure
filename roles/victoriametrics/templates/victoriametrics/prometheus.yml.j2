@@ -27,6 +27,13 @@ scrape_configs:
           - shop:9103       # env-sensors
           - wordclock:9103  # env-sensors
 
+  # mosquitto-prometheus-exporter (no auth).
+  - job_name: mosquitto
+    static_configs:
+      - targets:
+          - opus:9105  # mosquitto-prometheus-exporter
+          # - shop:9105  # add once shop is back online
+
   - job_name: gotosocial
     scheme: https
     basic_auth:

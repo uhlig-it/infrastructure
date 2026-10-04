@@ -55,7 +55,7 @@ Thin playbooks that deploy one application onto an existing host. Almost all of 
 | `uhlig-it/kehrkraft-deployment` | `neon` | systemd service + Caddy reverse proxy. |
 | `uhlig-it/uhlig.social-deployment` | `neon` | GoToSocial (local role) + Caddy + sqlite backup. |
 | `uhlig-it/concourse-deployment` | `soda` | Concourse web/worker + Postgres. |
-| `uhlig-it/mosquitto-exporter-deployment` | **deployed nowhere** | systemd service; old host `wg` retired. Needs resurrection. |
+| `uhlig-it/mosquitto-exporter-deployment` | `opus` | systemd service; retired, playbook now at `playbooks/services/mosquitto-exporter.yml`. |
 | `uhlig-it/metrics` | `soda` + 8 node exporters | VictoriaMetrics (local role) + node_exporter. |
 | `uhlig-it/mqtt-router` | `opus` | systemd service + routing config. |
 | `uhlig-it/mqtt-blink1` | `shop` | systemd service + udev rule. |
@@ -257,15 +257,15 @@ The scaffold lives at `github.com/uhlig-it/infrastructure/` in this workspace.
 - **Inventory, config, dependencies:** `inventory/hosts.yml` (all machines and groups, plus an `unassigned` parking group), `ansible.cfg`, `requirements.yml`, and a single `secrets.yml.example`.
 - **Playbooks:** `playbooks/fleet/` (tailscale, metrics), `playbooks/machines/` (9 hosts), `playbooks/services/` (16 services), and `site.yml`.
 - **Local roles migrated** into `roles/`: `frigate`, `GoToSocial`, `victoriametrics`, the opus container roles (`homeassistant`, `unifi`, `mosquitto`, `pi-hole`, `watchtower`, `uptime-kuma`), `shop-watchdog`, `switchbot-mqtt`, `fadecandy`, `wordclock`, `rails-puma`.
-- **Service playbooks migrated** with their real variables: `mqtt-router`, `speedtest-exporter`, `tasmota-firmware-proxy`, `mqtt-blink1`, `shorts`, `mqtt-gpio-binary-sensor`, `env-sensors`, `kehrkraft`, `gotosocial`, `concourse`, `www`, `speisehof`, `nowak-reisen`, plus the parked `mosquitto-exporter`, `youtube-likes-feed`, and `meal-tracker`.
+- **Service playbooks migrated** with their real variables: `mqtt-router`, `speedtest-exporter`, `tasmota-firmware-proxy`, `mqtt-blink1`, `shorts`, `mqtt-gpio-binary-sensor`, `env-sensors`, `kehrkraft`, `gotosocial`, `concourse`, `www`, `speisehof`, `nowak-reisen`, plus the parked `youtube-likes-feed` and `meal-tracker`.
 - **CI wired up:**
   - `infrastructure/.github/workflows/ci.yml` syntax-checks every playbook.
   - `infrastructure/.github/workflows/deploy.yml` is a reusable workflow that checks out the calling app repo plus this repo, installs the toolchain, and runs `playbooks/services/<service>.yml`.
-  - The release workflows of `mqtt-router`, `speedtest-exporter`, `tasmota-firmware-proxy`, `mqtt-blink1`, `shorts`, and `mqtt-gpio-binary-sensor` now call it from a `deploy` job.
+  - The release workflows of `mqtt-router`, `speedtest-exporter`, `tasmota-firmware-proxy`, `mqtt-blink1`, `shorts`, `mqtt-gpio-binary-sensor`, and `mosquitto-prometheus-exporter` now call it from a `deploy` job.
   - The Concourse pipelines of `env-sensors` and `www` now point their `playbook` resource at this repo.
-  - `mosquitto-exporter-deployment`'s deploy job is disabled (deployed nowhere).
+  - `mosquitto-exporter-deployment` is retired; its playbook now builds from source and deploys to `opus`.
 - **CI green:** the infrastructure repo's syntax-check passes on `main`. Getting there required installing collections as well as roles; moving `artis3n.tailscale` to `roles:`; installing `suhlig.foundation` from git (its new roles are not released to Galaxy); excluding `playbooks/services/files/` from the loop; and adding `community.docker`, `community.general`, `community.postgresql`, and `hifis.toolkit`.
-- **Parked services:** `mosquitto-exporter`, `youtube-likes-feed`, and `meal-tracker` target the `unassigned` group and are marked "CURRENTLY DEPLOYED NOWHERE" in their playbooks. They need a host before they can run.
+- **Parked services:** `youtube-likes-feed` and `meal-tracker` target the `unassigned` group and are marked "CURRENTLY DEPLOYED NOWHERE" in their playbooks. They need a host before they can run.
 - **Duplication removed:** the `deployment/` directories were deleted from the nine app repos (`mqtt-router`, `speedtest-exporter`, `mqtt-gpio-binary-sensor`, `env-sensors`, `shorts`, `youtube-likes-feed`, `meal-tracker`, `wordclock`, `www`), and their `syntax-check` CI jobs were removed (this repo's CI covers playbook syntax now). The vault-encrypted secrets from those directories were rescued into `secrets-import/`.
 - **Concourse role:** switched from `troykinsella.concourse` to `suhlig.concourse`, a fork with the removed `include` action fixed, installed from git (not Galaxy). `site.yml` now syntax-checks cleanly.
 - **Secrets consolidated:** all 27 `secrets-import/` files are merged. `inventory/group_vars/all/secrets.yml` holds the host-independent secrets (CI tokens, TLS email, metrics passwords, kehrkraft, uhlig.social, concourse, shorts, ytlf, meal-tracker, mosquitto-exporter, shop-alarm). Host-specific secrets live in `inventory/host_vars/<host>/secrets.yml` for opus, shop, pi5, pi0, kunakam, hansahaus, fortcarsta, and wordclock; those hosts now use a `host_vars/<host>/` directory (`main.yml` + `secrets.yml`). The MQTT URLs are service-specific (`mqtt_router_mqtt_url`, `mqtt_gpio_binary_sensor_mqtt_url`, `mqtt_blink1_mqtt_url`) because `mqtt-blink1` and `mqtt-gpio-binary-sensor` use different brokers on `shop`. All nine vault files are encrypted, and `secrets-import/` has been deleted.
@@ -274,7 +274,7 @@ The scaffold lives at `github.com/uhlig-it/infrastructure/` in this workspace.
 
 - Move the remaining machine playbook inline tasks (`pascal`'s TLS-cert and shop-health tasks).
 - Configure the `vault_password` secret in each app repo that calls the deploy workflow (the SSH deploy key is now read from the vault, so no `ssh_key` secret is needed).
-- Give the three parked services a host and re-enable their deploys.
-- Retire the deployment-only repos whose playbooks now live here (`kehrkraft-deployment`, `uhlig.social-deployment`, `concourse-deployment`, `mosquitto-exporter-deployment`, `tailscale`, and the per-host repos `pi5`, `pi0`, `fortress`, `opus`, `pascal`, `kunakam`, `shop`).
+- Give the two parked services a host and re-enable their deploys.
+- Retire the deployment-only repos whose playbooks now live here (`kehrkraft-deployment`, `uhlig.social-deployment`, `concourse-deployment`, `tailscale`, and the per-host repos `pi5`, `pi0`, `fortress`, `opus`, `pascal`, `kunakam`, `shop`).
 - Delete `deployment/` from the two out-of-workspace site repos (`speisehof/www`, `nowak-reisen/www`).
 - Delete the root-level `playbook.yml` (and `files/`) from `mqtt-blink1` and `tasmota-firmware-proxy`, the two app repos that keep their playbook at the repo root rather than in `deployment/`.

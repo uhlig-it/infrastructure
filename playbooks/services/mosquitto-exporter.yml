@@ -1,15 +1,55 @@
 ---
 # Source: github.com/uhlig-it/mosquitto-exporter-deployment
-# CURRENTLY DEPLOYED NOWHERE — needs resurrection.
-# The source repo targeted `wg`, which is retired, and the public broker
-# mqtt.uhlig.it is being decommissioned. Decide where the exporter belongs
-# (likely opus, next to the surviving Mosquitto broker) before enabling.
-# The binary is built by CI and passed as service_binary (extra-var).
+# The binary is built from the app checkout (app_source) on the controller,
+# the same way mqtt-router and speedtest-exporter are built.
 # Secrets (bind_address, mqtt.*) live in the vault.
+#
+# shop is offline and its broker does not yet have the `mosquitto-exporter`
+# user, so it is not a target yet. To add it: give shop's broker the user
+# (inventory/host_vars/shop/secrets.yml), point its exporter at the local
+# broker, and change the host pattern to `opus:shop`.
 - name: Deploy Mosquitto Prometheus Exporter
-  hosts: unassigned
-  gather_facts: true
+  hosts: opus
   become: true
+  gather_facts: true
+  vars:
+    deb_architectures:
+      armv6l: arm
+      armv7l: arm
+      aarch64: arm64
+      x86_64: amd64
+      i386: i386
+    goos: linux
+    goarch: "{{ deb_architectures[ansible_facts['architecture']] }}"
+    goarm: "{{ '6' if ansible_facts['architecture'] == 'armv6l' else '7' }}"
+    binary_path: "{{ app_source }}/dist/mosquitto-prometheus-exporter"
+  pre_tasks:
+    - name: Go modules are downloaded
+      ansible.builtin.command:
+        cmd: go mod download
+        chdir: "{{ app_source }}"
+      delegate_to: localhost
+      become: false
+      tags: [binary, build]
+    - name: Build output directory exists
+      ansible.builtin.file:
+        path: "{{ app_source }}/dist"
+        state: directory
+      delegate_to: localhost
+      become: false
+      tags: [binary, build]
+    - name: mosquitto-prometheus-exporter binary is built
+      ansible.builtin.command:
+        cmd: go build -o {{ binary_path }} .
+        chdir: "{{ app_source }}"
+      environment:
+        CGO_ENABLED: "0"
+        GOOS: "{{ goos }}"
+        GOARCH: "{{ goarch }}"
+        GOARM: "{{ goarm }}"
+      delegate_to: localhost
+      become: false
+      tags: [binary, build]
   roles:
     - role: uhlig-it.simple_systemd_service
       become: true
@@ -17,7 +57,8 @@
         program:
           name: mosquitto-prometheus-exporter
           description: Export Mosquitto metrics for Prometheus
-          binary: "{{ service_binary }}"
+          binary: "{{ binary_path }}"
+          runtime_user: mosquitto-prometheus-exporter
           environment:
             BIND_ADDRESS: "{{ bind_address }}"
             BROKER_ENDPOINT: "{{ mqtt.endpoint }}"
