@@ -4,5 +4,8 @@ ansible_user: suhlig
 # mqtt-gpio-binary-sensor
 gpio_pin: GPIO4
 
+# The GPIO4 PIR sensor benefits from the transition history in Home Assistant.
+mqtt_gpio_binary_sensor_event_sensor: true
+
 # gantsign.golang
 golang_version: "1.26.2"
