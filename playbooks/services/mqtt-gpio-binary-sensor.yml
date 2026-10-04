@@ -66,9 +66,7 @@
           name: mqtt-gpio-binary-sensor
           environment:
             MQTT_URL: "{{ mqtt_gpio_binary_sensor_mqtt_url }}"
-          parameters:
-            - --pin "{{ gpio_pin }}"
-            - --verbose
+          parameters: "{{ ['--pin \"' ~ gpio_pin ~ '\"', '--verbose'] + (mqtt_gpio_binary_sensor_event_sensor | default(false) | bool | ternary(['--event-sensor'], [])) }}"
           description: GPIO to MQTT Publisher
           runtime_user: mqtt-gpio-binary-sensor
           groups: [gpio]

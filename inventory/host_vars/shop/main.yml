@@ -20,6 +20,9 @@ rpiCameraTextOverlay: "Werkstatt %Y-%m-%d %H:%M:%S"
 # mqtt-gpio-binary-sensor
 gpio_pin: GPIO4
 
+# The workshop door benefits from the transition history in Home Assistant.
+mqtt_gpio_binary_sensor_event_sensor: true
+
 # env-sensors
 bme280_address: "0x76"
 tsl2561_address: "0x39"
