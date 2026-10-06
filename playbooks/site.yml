@@ -23,6 +23,7 @@
 - import_playbook: services/mqtt-blink1.yml
 - import_playbook: services/mqtt-gpio-binary-sensor.yml
 - import_playbook: services/env-sensors.yml
+- import_playbook: services/shop-alarm.yml
 - import_playbook: services/tasmota-firmware-proxy.yml
 - import_playbook: services/speedtest-exporter.yml
 - import_playbook: services/shorts.yml

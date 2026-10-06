@@ -1,0 +1,20 @@
+---
+# shop-alarm role defaults. Secrets come from the vault: the MQTT password is
+# looked up from mosquitto_users (same file the mosquitto role provisions the
+# broker password file from), so there is exactly one source for the
+# credential.
+
+alarm_core_mqtt_url: tcp://localhost:1883
+alarm_core_mqtt_password: "{{ (mosquitto_users | selectattr('name', 'equalto', 'shop-alarm') | map(attribute='password') | first | default('')) }}"
+
+# Scrape target for the werkstatt metrics job (see monitoring README).
+alarm_core_health_addr: ":9101"
+
+# Frigate runs unauthenticated on opus (kunakam role renders no auth section).
+alarm_core_frigate_api_url: "http://localhost:5000"
+alarm_core_frigate_api_user: ""
+alarm_core_frigate_api_password: ""
+# Backup channel; topic is set ad hoc (same convention as shop-health.sh).
+alarm_core_ntfy_url: "https://ntfy.sh/shop-alarm-e4ae8009-c460-48c5-aeed-8414efb0ac3d"
+# Link appended to notifications (Frigate UI / HA deep link).
+alarm_core_live_stream_url: "http://shop:8888/cam/"

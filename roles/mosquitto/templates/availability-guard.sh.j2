@@ -1,0 +1,17 @@
+#!/bin/sh
+# {{ ansible_managed }}
+# Keeps the retained availability topics truthful: republishes the retained
+# 'online' whenever the owning service itself is up, so a stale 'offline'
+# (broker restart, container recreate, watchtower update, bridge retained
+# replay) self-heals within the cron interval. Service down => its probe
+# fails => no publish => the LWT ('offline') stands.
+{% for guard in mosquitto_lwt_guards %}
+if curl -sf --max-time 5 '{{ guard.probe }}' >/dev/null 2>&1; then
+    docker exec mosquitto mosquitto_pub -h 127.0.0.1 -p 1883 \
+        -u '{{ mosquitto_stale_lwt_user }}' \
+        -P '{{ (mosquitto_users | selectattr('name', 'equalto', mosquitto_stale_lwt_user) | map(attribute='password') | first | default('')) }}' \
+        -r -t '{{ guard.topic }}' \
+        -m online
+fi
+{% endfor %}
+exit 0

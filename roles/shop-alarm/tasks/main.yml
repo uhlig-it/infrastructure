@@ -1,0 +1,40 @@
+---
+- name: State directory exists # the container runs as distroless nonroot (65532)
+  ansible.builtin.file:
+    path: /opt/shop-alarm/state
+    state: directory
+    owner: "65532"
+    group: "65532"
+    mode: "0750"
+  become: true
+  tags: [ docker, shop-alarm, container, directory ]
+- name: MQTT credentials for shop-alarm are provisioned
+  ansible.builtin.fail:
+    msg: "Add an 'shop-alarm' entry to mosquitto_users in group_vars/all/secrets.yml (the file the mosquitto role uses to generate the broker password file)."
+  when: alarm_core_mqtt_password == ""
+  tags: [ docker, shop-alarm, container ]
+- name: shop-alarm is running
+  community.docker.docker_container:
+    name: shop-alarm
+    image: ghcr.io/uhlig-it/shop-alarm:latest
+    pull: true
+    state: started
+    detach: true
+    restart: true
+    restart_policy: always
+    network_mode: host # localhost:1883 (mosquitto), localhost:5000 (frigate), :9101 (metrics)
+    env:
+      MQTT_URL: "{{ alarm_core_mqtt_url }}"
+      MQTT_USER: shop-alarm
+      MQTT_PASSWORD: "{{ alarm_core_mqtt_password }}"
+      MQTT_CLIENT_ID: shop-alarm
+      STATE_FILE: /var/lib/shop-alarm/state.json
+      HEALTH_ADDR: "{{ alarm_core_health_addr }}"
+      FRIGATE_API_URL: "{{ alarm_core_frigate_api_url }}"
+      FRIGATE_API_USER: "{{ alarm_core_frigate_api_user }}"
+      FRIGATE_API_PASSWORD: "{{ alarm_core_frigate_api_password }}"
+      NTFY_URL: "{{ alarm_core_ntfy_url }}"
+      LIVE_STREAM_URL: "{{ alarm_core_live_stream_url }}"
+    volumes:
+      - /opt/shop-alarm/state:/var/lib/shop-alarm
+  tags: [ docker, shop-alarm, container ]

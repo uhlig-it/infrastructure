@@ -79,7 +79,6 @@ Thin playbooks that deploy one application onto an existing host. Almost all of 
 
 | Repo | Status |
 | --- | --- |
-| `uhlig-it/shop-alarm` | README says replaced by `mqtt-router`. Ruby + Ansistrano. |
 | `uhlig-it/home-automation` | 2022-era roles (python2, `jessie` repos, disabled services). Host `wordclock`. |
 | `uhlig-it/inventory` | Terraform for Hetzner `soda`; README says out of sync. Contains the best written record of the fleet and DNS. |
 
@@ -231,7 +230,7 @@ Do it in phases so nothing breaks in between.
 3. **Move machine playbooks** one host at a time (`pi5`, `pi0`, `pascal`, `fortress`, `wordclock`, `kunakam`, `shop`, `opus`, `neon`). Pull host-specific vars into `host_vars/`. Verify each with `--check` before deleting the old playbook.
 4. **Move service playbooks** one app at a time. Keep the app repo's CI, but point its deploy step at the infrastructure playbook.
 5. **Move the static sites** (www, speisehof, nowak-reisen) last — they are the most self-contained.
-6. **Retire** `shop-alarm` and `home-automation`; fold anything still wanted into `playbooks/services/` and `playbooks/machines/wordclock.yml`.
+6. **Retire** `home-automation`; fold anything still wanted into `playbooks/machines/wordclock.yml`. (`shop-alarm` was reactivated, not retired — it now lives in `playbooks/services/shop-alarm.yml`; see Progress.)
 7. **Clean up** the shared library: pick one namespace for the systemd role (`uhlig-it.simple_systemd_service` — fix `youtube-likes-feed`'s old `suhlig.simple_systemd_service` reference), add the missing `requirements.yml` entries (`uhlig-it.duckdns`, `uhlig-it.home-assistant-backup-b2`, `uhlig-it.sqlite_backup_b2`), and fix the broken `~/.ansible/roles/suhlig.foundation` symlink (it points at `ansible-role-foundation`, but the repo is now `foundation`).
 
 ## Conventions to adopt
@@ -256,8 +255,9 @@ The scaffold lives at `github.com/uhlig-it/infrastructure/` in this workspace.
 
 - **Inventory, config, dependencies:** `inventory/hosts.yml` (all machines and groups, plus an `unassigned` parking group), `ansible.cfg`, `requirements.yml`, and a single `secrets.yml.example`.
 - **Playbooks:** `playbooks/fleet/` (tailscale, metrics), `playbooks/machines/` (9 hosts), `playbooks/services/` (16 services), and `site.yml`.
-- **Local roles migrated** into `roles/`: `frigate`, `GoToSocial`, `victoriametrics`, the opus container roles (`homeassistant`, `unifi`, `mosquitto`, `pi-hole`, `watchtower`, `uptime-kuma`), `shop-watchdog`, `switchbot-mqtt`, `fadecandy`, `wordclock`, `rails-puma`.
-- **Service playbooks migrated** with their real variables: `mqtt-router`, `speedtest-exporter`, `tasmota-firmware-proxy`, `mqtt-blink1`, `shorts`, `mqtt-gpio-binary-sensor`, `env-sensors`, `kehrkraft`, `gotosocial`, `concourse`, `www`, `speisehof`, `nowak-reisen`, plus the parked `youtube-likes-feed` and `meal-tracker`.
+- **Local roles migrated** into `roles/`: `frigate`, `GoToSocial`, `victoriametrics`, the opus container roles (`homeassistant`, `unifi`, `mosquitto`, `pi-hole`, `watchtower`, `uptime-kuma`, `shop-alarm`), `shop-watchdog`, `switchbot-mqtt`, `fadecandy`, `wordclock`, `rails-puma`.
+- **Service playbooks migrated** with their real variables: `mqtt-router`, `speedtest-exporter`, `tasmota-firmware-proxy`, `mqtt-blink1`, `shorts`, `mqtt-gpio-binary-sensor`, `env-sensors`, `kehrkraft`, `gotosocial`, `concourse`, `www`, `speisehof`, `nowak-reisen`, `shop-alarm`, plus the parked `youtube-likes-feed` and `meal-tracker`.
+- **shop-alarm folded in** (from `uhlig-it/opus`, branch `redesign-shop-alarm`): `roles/shop-alarm` plus `playbooks/services/shop-alarm.yml`. The mosquitto role also gained the retained-LWT availability guard (`roles/mosquitto/defaults/main.yml`, `roles/mosquitto/templates/availability-guard.sh.j2`) covering `frigate/available` and `werkstatt/alarm/available`.
 - **CI wired up:**
   - `infrastructure/.github/workflows/ci.yml` syntax-checks every playbook.
   - `infrastructure/.github/workflows/deploy.yml` is a reusable workflow that checks out the calling app repo plus this repo, installs the toolchain, and runs `playbooks/services/<service>.yml`.
@@ -275,6 +275,6 @@ The scaffold lives at `github.com/uhlig-it/infrastructure/` in this workspace.
 - Move the remaining machine playbook inline tasks (`pascal`'s TLS-cert and shop-health tasks).
 - Configure the `vault_password` secret in each app repo that calls the deploy workflow (the SSH deploy key is now read from the vault, so no `ssh_key` secret is needed).
 - Give the two parked services a host and re-enable their deploys.
-- Retire the deployment-only repos whose playbooks now live here (`kehrkraft-deployment`, `uhlig.social-deployment`, `concourse-deployment`, `tailscale`, and the per-host repos `pi5`, `pi0`, `fortress`, `opus`, `pascal`, `kunakam`, `shop`).
+- Retire the deployment-only repos whose playbooks now live here (`kehrkraft-deployment`, `uhlig.social-deployment`, `concourse-deployment`, `tailscale`, and the per-host repos `pi5`, `pi0`, `fortress`, `opus`, `pascal`, `kunakam`, `shop`). `opus` is unblocked (its `shop-alarm` role and the mosquitto guard are folded in) but its GitHub repo is still private and not archived.
 - Delete `deployment/` from the two out-of-workspace site repos (`speisehof/www`, `nowak-reisen/www`).
 - Delete the root-level `playbook.yml` (and `files/`) from `mqtt-blink1` and `tasmota-firmware-proxy`, the two app repos that keep their playbook at the repo root rather than in `deployment/`.

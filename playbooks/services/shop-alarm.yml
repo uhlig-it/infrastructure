@@ -1,0 +1,13 @@
+---
+# Source: github.com/uhlig-it/opus (role: shop-alarm).
+# shop-alarm runs as a container on opus; the image is published by
+# github.com/uhlig-it/shop-alarm on every main push and auto-updated by
+# watchtower. The MQTT credential is looked up from mosquitto_users in the
+# vault, so the broker and the container share one source of truth.
+- name: Deploy shop-alarm
+  hosts: opus
+  become: true
+  gather_facts: false
+  roles:
+    - role: shop-alarm
+      tags: [ docker, shop-alarm, container ]

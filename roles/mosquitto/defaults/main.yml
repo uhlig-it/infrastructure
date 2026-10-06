@@ -1,0 +1,21 @@
+---
+# Availability guard for stale retained LWT topics after broker restarts.
+#
+# Frigate and shop-alarm publish their availability as retained LWT topics;
+# on connection loss the broker stores 'offline'. Frigate never republishes
+# on reconnect, and a bridging broker replaying stale retained messages can
+# clobber even topics whose owner did republish (incidents 2026-09-22:
+# "Werkstatt Cam unavailable", alarm panel unavailable). The guard below
+# republishes the retained 'online' for each topic, but only while that
+# topic's owner actually answers its health probe — a genuinely dead service
+# must still read 'offline'.
+
+# Broker user that owns the guarded topics (must exist in mosquitto_users).
+mosquitto_stale_lwt_user: frigate
+# Topics to republish as retained 'online', each with the probe that must
+# answer 200 before the republish happens.
+mosquitto_lwt_guards:
+  - topic: frigate/available
+    probe: http://localhost:5000/api/version
+  - topic: werkstatt/alarm/available
+    probe: http://localhost:9101/healthz

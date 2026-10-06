@@ -1,8 +1,6 @@
 ---
 # Source: github.com/uhlig-it/opus
 # Tailscale is configured by playbooks/fleet/tailscale.yml.
-# TODO: migrate the local container roles into roles/:
-#       homeassistant, unifi, mosquitto, pi-hole, watchtower, uptime-kuma.
 - name: opus home server
   hosts: opus
   collections:

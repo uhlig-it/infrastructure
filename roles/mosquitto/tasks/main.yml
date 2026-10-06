@@ -45,3 +45,29 @@
       - /opt/mosquitto/data:/mosquitto/data
       - /opt/mosquitto/log:/mosquitto/log
   tags: [ docker, mosquitto, mqtt ]
+- name: Availability guard script is rendered
+  template:
+    src: templates/availability-guard.sh.j2
+    dest: /opt/mosquitto/availability-guard.sh
+    mode: "0700"
+    owner: root
+    group: root
+  become: true
+  tags: [ docker, mosquitto, mqtt ]
+- name: Availability guard is run right after the broker (re)start
+  ansible.builtin.command: /opt/mosquitto/availability-guard.sh
+  become: true
+  register: mosquitto_availability_guard_run
+  retries: 6
+  delay: 3
+  until: mosquitto_availability_guard_run.rc == 0 # broker may still be starting
+  when: mosquitto_stale_lwt_user in (mosquitto_users | map(attribute='name'))
+  tags: [ docker, mosquitto, mqtt ]
+- name: Availability guard runs every two minutes
+  ansible.builtin.cron:
+    name: mqtt availability guard
+    user: root
+    minute: "*/2"
+    job: /opt/mosquitto/availability-guard.sh
+  become: true
+  tags: [ docker, mosquitto, mqtt, cron ]
