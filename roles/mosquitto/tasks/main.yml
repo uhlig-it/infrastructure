@@ -1,10 +1,14 @@
 - name: Directories exist
   ansible.builtin.file:
-    path: /opt/mosquitto/{{ item }}
+    path: /opt/mosquitto/{{ item.path }}
     state: directory
-    owner: suhlig
-    group: suhlig
-  with_items: [ config, data, log ]
+    owner: "{{ item.owner }}"
+    group: "{{ item.owner }}"
+  loop:
+    - { path: config, owner: suhlig }
+    - { path: log, owner: suhlig }
+    # The broker container (uid 1883) writes its persistence database here.
+    - { path: data, owner: "1883" }
   become: true
   tags: [ docker, mosquitto, mqtt, directory ]
 - name: Password file exists # needs to exist for bootstrapping
@@ -22,12 +26,14 @@
     detach: true
     volumes: [ /opt/mosquitto/config:/mosquitto/config ]
   loop: "{{ mosquitto_users }}"
+  no_log: true # the command line carries each user's password
   tags: [ docker, mosquitto, mqtt, passwd, file ]
-- name: Config is rendered
+- name: Config is rendered # may embed bridge passwords, hence no_log
   template:
     src: templates/mosquitto.conf
     dest: /opt/mosquitto/config/mosquitto.conf
   become: true
+  no_log: true
   tags: [ config, mosquitto, mqtt ]
 - name: Service is running
   community.docker.docker_container:
@@ -44,6 +50,19 @@
       - /opt/mosquitto/config/passwd:/mosquitto/config/passwd
       - /opt/mosquitto/data:/mosquitto/data
       - /opt/mosquitto/log:/mosquitto/log
+  tags: [ docker, mosquitto, mqtt ]
+- name: Legacy frigate-only availability guard cron is removed
+  ansible.builtin.cron:
+    name: frigate availability guard
+    user: root
+    state: absent
+  become: true
+  tags: [ docker, mosquitto, mqtt, cron ]
+- name: Legacy frigate-only availability guard script is removed
+  ansible.builtin.file:
+    path: /opt/mosquitto/frigate-availability.sh
+    state: absent
+  become: true
   tags: [ docker, mosquitto, mqtt ]
 - name: Availability guard script is rendered
   template:
