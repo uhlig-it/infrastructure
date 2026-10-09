@@ -12,3 +12,9 @@
     # instead of OOM-killing a service. Revert by dropping this role.
     - role: overcommit
       become: true
+    # soda is the only host without the fleet baseline (main/minimal), so its
+    # unattended-upgrades ran on distro defaults only. Bring it under the same
+    # management as the rest of the fleet (origins from group_vars/all).
+    - role: hifis.toolkit.unattended_upgrades
+      become: true
+      tags: [unattended, apt, system]

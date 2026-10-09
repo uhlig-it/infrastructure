@@ -21,10 +21,12 @@ metrics:
   port: 9104
 
 # Unattended upgrades (role `hifis.toolkit.unattended_upgrades`, pulled in via
-# suhlig.foundation.minimal). The role's Debian default only covers the Debian
-# security archive; add the Tailscale repo (origin/label `Tailscale`) so
-# tailscaled keeps updating too.
+# suhlig.foundation.minimal). Setting this variable REPLACES the role's
+# per-distribution defaults, so it must carry the security origin for every OS
+# in the fleet: Debian and Ubuntu (hosts ignore the pattern that does not match).
+# Add the Tailscale repo (origin/label `Tailscale`) so tailscaled keeps updating.
 unattended_origins_patterns:
   - "origin=Debian,codename=${distro_codename},label=Debian-Security"
   - "origin=Debian,codename=${distro_codename}-security,label=Debian-Security"
+  - "origin=Ubuntu,archive=${distro_codename}-security,label=Ubuntu"
   - "origin=Tailscale,codename=${distro_codename},label=Tailscale"
