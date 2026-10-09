@@ -1,0 +1,8 @@
+---
+# Target user for the CI deploy key: whoever the deploy workflow logs in as,
+# which is the same user Ansible connects as — `root` on the servers, `suhlig`
+# on the rest.
+deploy_key_user: "{{ ansible_user }}"
+
+# Comment written onto the key line, to identify it in `authorized_keys`.
+deploy_key_comment: CI

@@ -1,0 +1,13 @@
+---
+# Install the CI deploy key (the public half of the vault's `github.ssh_key`,
+# held in `ci_deploy_public_key`) so the reusable deploy workflow and Concourse
+# can SSH in as the host's ansible_user. Public keys are not secret. The module
+# also rewrites an existing entry whose comment differs, so this is idempotent
+# and self-correcting.
+- name: The CI deploy key is authorized
+  ansible.posix.authorized_key:
+    user: "{{ deploy_key_user }}"
+    key: "{{ ci_deploy_public_key }}"
+    comment: "{{ deploy_key_comment }}"
+    state: present
+    manage_dir: true

@@ -6,6 +6,12 @@ timezone: Europe/Berlin
 tailscale_up_skip: true
 tailscale_args: --accept-routes
 
+# Public half of the vault's `github.ssh_key`. `playbooks/fleet/deploy_key.yml`
+# installs it into each host's `authorized_keys` for the host's `ansible_user`
+# (root on the servers, suhlig elsewhere), so the reusable deploy workflow and
+# Concourse can SSH in. Public keys are not secret; rotate it with the vault key.
+ci_deploy_public_key: "ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAACAQDNWOmKQ2CwofcZD29EeXEr0P7Z2CbzITjqHqD6Mw2Js5llN0dnM88mX6Jk+rGkFEqb60Z3mu9Tx+iqT/xVEjqgW1iJjiYEWl/xysK6Yd4mUWE96Rvz5Ya3cOcHCcOkf8gFKJ+lZoNudXkw46BS0eepzM75lLGLpkki0oNWaPGpidRUpSs+YmH1H6hC6OQeO/Mi5TU2F8a4s/RMr+Kgg78+lpAHhNC5G4yLYWRDuKQKUq1Ok57LBe8VbUgy0M+Vdgm8ay0XEt8uHYIwqlerygWJix0CMB2YteTJCT0FyVXpIuMICjOymmBFyeALkrKbjrpf3kd4PYj/MQP1l5vwPXk7evpwrnQjK+d4QNFzQgHVwdyGZlknXicbG/5lh4Z/EcdH9bhmS4dFMIAPxqY0oAeO15nugcoVkNdbSuYNH7vVeYh03rDKZnXmFhNptHAfDtao57U5J5a09lYOl8D2QTEg7WsDRQM6WoljRB45yNimiVWgwZJ+9P79BRuS7180QHSmOzK0U8YPpan/bFjwO1RJduu/pO0OU4XWi0ZRrZZsbiJ5DEvEu2JkEybEN8lUSl7HniFs9081FzrRLpqcvS51BnYKODrZk/PuMHobdzV7CuFMiPDeogKDMBmYJHHxXN0X1l2mytH/n+UXYiodnVbJ0nZB1MIhuAlfst9S4ahddw=="
+
 # Root of this repo, for referencing role files from playbooks.
 infrastructure_root: "{{ inventory_dir }}/.."
 

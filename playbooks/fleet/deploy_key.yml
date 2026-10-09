@@ -1,0 +1,13 @@
+---
+# Install the CI deploy key on every host so the reusable deploy workflow (and
+# Concourse) can SSH in. The key is the public half of the vault's
+# `github.ssh_key`, kept in `ci_deploy_public_key`; it goes into each host's
+# ansible_user (root on the servers, suhlig elsewhere). Offline hosts are
+# skipped rather than failing the run. See infrastructure/README.md, "SSH access".
+- name: Authorize the CI deploy key
+  hosts: all
+  gather_facts: false
+  become: true
+  ignore_unreachable: true
+  roles:
+    - deploy_key

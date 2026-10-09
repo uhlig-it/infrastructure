@@ -1,6 +1,7 @@
 ---
 # Runs the whole fleet: fleet concerns, then machines, then services.
 # During migration, prefer running the narrower playbooks individually.
+- import_playbook: fleet/deploy_key.yml
 - import_playbook: fleet/tailscale.yml
 - import_playbook: fleet/metrics.yml
 
