@@ -109,7 +109,7 @@ This is the table the consolidated inventory should encode. It merges every inve
 | `pi0` | — (not in tailnet) | Raspberry Pi Zero | mediamtx camera |
 | `kunakam` | `kunakam` (offline, kept for revival) | Camera | mediamtx camera |
 | `wordclock` | `wordclock` | Raspberry Pi | wordclock app, env-sensors, home-automation (alexa) |
-| `pascal` | `pascal` | 3D printer server | is-tls-expiring, shop-health |
+| `pascal` | `pascal` | 3D printer server | OctoPrint (Tailscale Service `svc:octoprint`), go2rtc printer camera, shop-health |
 | `hansahaus` | `hansahaus` | Fortress | baseline hardening |
 | `fortcarsta` | `fortcarsta` | Fortress | baseline hardening |
 
@@ -145,6 +145,26 @@ Full list from `tailscale status` on this machine, mapped to the plan.
 - `pi0` runs the Tailscale role but has no node in the tailnet — either it never joined or it was removed. Decide whether it should be a managed node.
 - `opus` is the exit node now, but the old inventory still marks `wg` as the exit node. Update.
 - `neon`, `soda`, and `opus` are `tagged-devices`, consistent with the `tag:server` model described in `suhlig.foundation.tailscale_service`. Keep tagging them deliberately.
+
+### CI identity
+
+The deploy workflow has to join the tailnet to reach the fleet, because the inventory addresses hosts by MagicDNS name and those names only resolve inside the tailnet. It authenticates with an **OAuth client**, not a static auth key: auth keys are capped at a 90-day lifetime, while the OAuth client's secret does not expire, and its nodes are tag-owned instead of being tied to a human identity.
+
+One-time tailnet setup (admin console → **Access controls** and **Trust credentials**):
+
+1. A `tag:ci` in `tagOwners`. **Add** it to the existing policy — don't replace the file, or the fleet's own tags would be lost:
+
+   ```json
+   "tagOwners": { "tag:ci": ["autogroup:admin"] }
+   ```
+
+   No `acls` entry is needed while this tailnet keeps its default catch-all (`src: ["*"]` → `dst: ["*:*"]`), because that rule already matches the CI nodes. If the catch-all is ever replaced with specific rules, add `{ "action": "accept", "src": ["tag:ci"], "dst": ["*:22"] }` so CI can still SSH to the fleet.
+
+   Security note: under a catch-all, `tag:ci` nodes can reach the whole tailnet, so the tag does not confine CI to SSH — it only keeps CI nodes from carrying a user identity and makes them revocable via the OAuth client. Confining them for real requires replacing the catch-all (and re-granting every other node explicitly).
+
+2. An OAuth client with the writable `auth_keys` scope and `tag:ci`. In the console's grouped scope picker this is **Keys → Auth keys**, read + write; leave the other sections (General, Devices, Logging, Settings) off, and in particular do not grant `all`. A leaked secret can then only mint `tag:ci` nodes, not arbitrary ones.
+
+The client ID and secret become the `ts_oauth_client_id` / `ts_oauth_secret` secrets (see the README's "Required CI secrets"). `tailscale/github-action` marks each CI node ephemeral and preapproved, so no manual approval is needed and no stale nodes accumulate.
 
 ## Proposed target structure
 
@@ -285,7 +305,7 @@ The scaffold lives at `github.com/uhlig-it/infrastructure/` in this workspace.
 
 ### Still to do
 
-- Move the remaining machine playbook inline tasks (`pascal`'s TLS-cert and shop-health tasks).
+- Migrate `pascal`'s remaining inline tasks into the playbook/roles: install `github3.py` and the `shop-health` script/service/timer. The TLS-cert half is done — the Tailscale Service `svc:octoprint` replaced the manual cert, cron and `is-tls-expiring` monitor (see `roles/octoprint`, commit `8beb3eb`).
 - Configure the `vault_password` secret in each app repo that calls the deploy workflow (the SSH deploy key is now read from the vault, so no `ssh_key` secret is needed).
 - Give the two parked services a host and re-enable their deploys.
 - Retire the deployment-only repos whose playbooks now live here (`kehrkraft-deployment`, `uhlig.social-deployment`, `concourse-deployment`, `tailscale`, and the per-host repos `pi5`, `pi0`, `fortress`, `opus`, `pascal`, `kunakam`, `shop`). `opus` is unblocked (its `shop-alarm` role and the mosquitto guard are folded in) but its GitHub repo is still private and not archived.

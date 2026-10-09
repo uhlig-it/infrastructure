@@ -10,10 +10,11 @@ name: Deploy
 #       service: mqtt-router
 #     secrets: inherit
 #
-# The caller must define the `vault_password` and `tailscale_authkey` secrets. The
-# SSH deploy key is read from the vault (`github.ssh_key`), so no separate
-# `ssh_key` secret is needed. The runner joins the tailnet so it can resolve the
-# MagicDNS host names in the inventory.
+# The caller must define `vault_password` plus the Tailscale OAuth client
+# secrets (`ts_oauth_client_id`, `ts_oauth_secret`, scope `auth_keys`, tag
+# `tag:ci`). The SSH deploy key is read from the vault (`github.ssh_key`), so no
+# separate `ssh_key` secret is needed. The runner joins the tailnet as a tagged
+# ephemeral node so it can resolve the MagicDNS host names in the inventory.
 on:
   workflow_call:
     inputs:
@@ -30,8 +31,11 @@ on:
       vault_password:
         description: Ansible vault password
         required: true
-      tailscale_authkey:
-        description: Tailscale auth key so the runner can join the tailnet
+      ts_oauth_client_id:
+        description: Tailscale OAuth client ID (auth_keys scope, tag:ci)
+        required: true
+      ts_oauth_secret:
+        description: Tailscale OAuth client secret
         required: true
 
 jobs:
@@ -83,7 +87,9 @@ jobs:
       - name: Join the tailnet
         uses: tailscale/github-action@v3
         with:
-          authkey: ${{ secrets.tailscale_authkey }}
+          oauth-client-id: ${{ secrets.ts_oauth_client_id }}
+          oauth-secret: ${{ secrets.ts_oauth_secret }}
+          tags: tag:ci
           args: --accept-routes
       - name: Deploy
         working-directory: infrastructure
