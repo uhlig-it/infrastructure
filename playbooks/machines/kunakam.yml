@@ -2,7 +2,7 @@
 # Source: github.com/uhlig-it/kunakam
 # Tailscale is configured by playbooks/fleet/tailscale.yml.
 # Camera variables live in inventory/host_vars/kunakam.yml.
-# TODO: migrate the local `frigate` role into roles/frigate/.
+# The Frigate NVR play lives in playbooks/machines/opus.yml — it runs on opus.
 - name: kunakam camera
   hosts: cameras
   roles:
@@ -15,10 +15,3 @@
     - role: suhlig.foundation.mediamtx
       become: true
       tags: [mediamtx]
-
-- name: kunakam NVR
-  hosts: nvrs
-  roles:
-    - role: frigate
-      become: true
-      tags: [frigate]

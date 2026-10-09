@@ -4,18 +4,55 @@ mqtt:
   host: {{ frigate.mqtt.host }}
   user: {{ frigate.mqtt.user }}
   password: {{ frigate.mqtt.password }}
+# Only one profile can be active at a time; switching happens via
+# `frigate/profile/set` (e.g. from the alarm state machine on opus or HA).
+profiles:
+  disarmed:
+    friendly_name: Disarmed
+  armed:
+    friendly_name: Armed
 cameras:
-{% for name, url in cameras.items() %}
+{% for name, camera in frigate.cameras.items() %}
   {{ name }}:
     enabled: true
     ffmpeg:
       inputs:
-        - path: {{ url }}
+        - path: rtsp://127.0.0.1:8554/{{ name }}
+          input_args: preset-rtsp-restream
           roles:
             - detect
             - record
+    live:
+      streams:
+        Stream 1: {{ name }}
+    objects:
+      track: [person]
+    review:
+      alerts:
+        labels: [person]
     mqtt:
       enabled: false # do not publish snapshot via mqtt
+    profiles:
+      armed:
+        detect:
+          enabled: true
+        record:
+          enabled: true
+      disarmed:
+        detect:
+          enabled: false
+        motion:
+          enabled: false
+        record:
+          enabled: false
+{% endfor %}
+# go2rtc holds the real camera source; the camera above reads Frigate's own
+# restream so it can be opened once and shared (detect + record + live).
+go2rtc:
+  streams:
+{% for name, camera in frigate.cameras.items() %}
+    {{ name }}:
+      - {{ camera.source }}
 {% endfor %}
 detectors:
   coral:
@@ -45,5 +82,15 @@ record:
       mode: active_objects
 ffmpeg:
   hwaccel_args: preset-intel-qsv-h264
+# Event snapshots are attached to alarm notifications: shop-alarm fetches
+# /api/review/<id>/snapshot.jpg for the triggering review. Frigate leaves
+# snapshots off unless the key is present, which yielded a black attachment
+# (incident 2026-09-24).
+snapshots:
+  enabled: true
+  timestamp: false
+  bounding_box: true
+  retain:
+    default: 3
 birdseye:
   enabled: false

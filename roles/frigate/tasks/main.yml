@@ -23,10 +23,18 @@
     group: suhlig
   become: true
   tags: [ frigate, directory ]
+- name: Config directory exists
+  ansible.builtin.file:
+    path: /opt/frigate/config
+    state: directory
+    owner: suhlig
+    group: suhlig
+  become: true
+  tags: [ frigate, directory ]
 - name: Config file is present
   template:
     src: config.yml.j2
-    dest: /opt/frigate/config.yml
+    dest: /opt/frigate/config/config.yml
     mode: "0755"
     owner: suhlig
     group: suhlig
@@ -45,7 +53,7 @@
     restart_policy: always
     volumes:
       - /opt/frigate/storage:/media/frigate
-      - /opt/frigate/config.yml:/config/config.yml
+      - /opt/frigate/config:/config
       - /etc/localtime:/etc/localtime:ro
       - /dev/bus/usb:/dev/bus/usb # USB Coral
     published_ports:
@@ -66,12 +74,13 @@
     pull: true
     state: started
     detach: true
+    recreate: true
     privileged: true
     restart: true
     restart_policy: always
     volumes:
       - /opt/frigate/storage:/media/frigate
-      - /opt/frigate/config.yml:/config/config.yml
+      - /opt/frigate/config:/config
       - /etc/localtime:/etc/localtime:ro
       - /dev/bus/usb:/dev/bus/usb # USB Coral
     published_ports:
