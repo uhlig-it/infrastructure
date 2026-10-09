@@ -2,7 +2,7 @@
 # Source: github.com/uhlig-it/speedtest-exporter
 # Builds the binary from the app checkout (app_source) on the controller.
 - name: Deploy the Speedtest Exporter
-  hosts: hansahaus:fortcarsta:opus
+  hosts: hansahaus:fortcarsta:opus:shop
   become: true
   gather_facts: true
   pre_tasks:

@@ -30,3 +30,8 @@
     - role: shop-watchdog
       become: true
       tags: [watchdog, network, stability, wifi]
+    # Measures the workshop uplink. shop (idle Pi 3, load ~0.3) is the right
+    # host: pascal sits on the same uplink but is busy transcoding the camera.
+    - role: suhlig.foundation.speedtest
+      become: true
+      tags: [speedtest, metrics]

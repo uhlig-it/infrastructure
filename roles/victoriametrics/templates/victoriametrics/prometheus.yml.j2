@@ -24,6 +24,7 @@ scrape_configs:
           - opus:9104       # speedtest
           - hansahaus:9104  # speedtest
           - fortcarsta:9104 # speedtest
+          - shop:9104       # speedtest
           - shop:9103       # env-sensors
           - wordclock:9103  # env-sensors
 
@@ -33,6 +34,12 @@ scrape_configs:
       - targets:
           - opus:9105  # mosquitto-prometheus-exporter
           # - shop:9105  # add once shop is back online
+
+  # Workshop alarm exporter (shop-alarm container on opus:9101);
+  # unauthenticated /metrics endpoint.
+  - job_name: werkstatt
+    static_configs:
+      - targets: [ opus:9101 ]
 
   - job_name: gotosocial
     scheme: https
