@@ -63,10 +63,18 @@ if ping -c 1 -W 1 "$GATEWAY" >/dev/null 2>&1; then
   reset_count "$NET_STATE"
 elif [ "$(file_count "$NET_STATE")" -ge "$LIMIT" ]; then
   note "gateway $GATEWAY unreachable for $LIMIT checks; restarting wireless"
-  systemctl restart wpa_supplicant dhcpcd >/dev/null 2>&1 || true
-  ip link set "$IFACE" down 2>/dev/null || true
-  sleep 2
-  ip link set "$IFACE" up 2>/dev/null || true
+  # This host is managed by NetworkManager (there is no dhcpcd); bounce the
+  # device so it re-associates and re-runs DHCP. Fall back to a raw link
+  # bounce if nmcli is unavailable.
+  if command -v nmcli >/dev/null 2>&1; then
+    nmcli device disconnect "$IFACE" >/dev/null 2>&1 || true
+    sleep 2
+    nmcli device connect "$IFACE" >/dev/null 2>&1 || true
+  else
+    ip link set "$IFACE" down 2>/dev/null || true
+    sleep 2
+    ip link set "$IFACE" up 2>/dev/null || true
+  fi
   reset_count "$NET_STATE"
   reset_count "$TS_STATE"
   bump "$BOUNCE_STATE"

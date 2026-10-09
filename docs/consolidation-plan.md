@@ -42,7 +42,7 @@ One repo per machine (or small machine group). These are the natural home for "w
 | `uhlig-it/pi0` | `pi0` | Raspberry Pi Zero camera (mediamtx). |
 | `uhlig-it/pascal` | `pascal` | 3D printer server: baseline + inline TLS-cert and shop-health tasks. |
 | `uhlig-it/fortress` | `hansahaus`, `fortcarsta` | Baseline hardening for two remote footholds. |
-| `uhlig-it/kunakam` | `kunakam` (camera), `opus` (NVR) | Camera fleet + the `mediamtx` deployment. The Frigate NVR it once deployed is **no longer managed by any repo** — see Progress. |
+| `uhlig-it/kunakam` | `kunakam` (camera), `opus` (NVR) | Camera (mediamtx) fleet; the host is kept for revival. The Frigate NVR moved to `opus` (see Progress). |
 | `suhlig/wordclock` | `wordclock` | Word clock app (local `fadecandy` + `wordclock` roles). |
 | `uhlig-it/tailscale` | fleet | The de-facto fleet-wide Tailscale config. |
 
@@ -107,7 +107,7 @@ This is the table the consolidated inventory should encode. It merges every inve
 | `soda` | `soda` (tagged) | Hetzner server | Concourse (web + worker + Postgres), VictoriaMetrics |
 | `pi5` | `pi5` | Raspberry Pi 5 | Go, Docker, mqtt-gpio-binary-sensor |
 | `pi0` | — (not in tailnet) | Raspberry Pi Zero | mediamtx camera |
-| `kunakam` | `kunakam` (offline 374d) | Camera | mediamtx camera |
+| `kunakam` | `kunakam` (offline, kept for revival) | Camera | mediamtx camera |
 | `wordclock` | `wordclock` | Raspberry Pi | wordclock app, env-sensors, home-automation (alexa) |
 | `pascal` | `pascal` | 3D printer server | is-tls-expiring, shop-health |
 | `hansahaus` | `hansahaus` | Fortress | baseline hardening |
@@ -128,7 +128,7 @@ Full list from `tailscale status` on this machine, mapped to the plan.
 | `pascal` | suhlig@ | linux | offline 17h | `pascal` machine |
 | `hansahaus` | suhlig@ | linux | — | `hansahaus` machine (fortress) |
 | `fortcarsta` | suhlig@ | linux | — | `fortcarsta` machine (fortress) |
-| `kunakam` | suhlig@ | linux | offline 374d | `kunakam` machine (camera) |
+| `kunakam` | suhlig@ | linux | offline (kept for revival) | `kunakam` machine (camera) |
 | `tape` | suhlig@ | linux | offline 3d | unassigned — decide: machine or retire |
 | `lux` | suhlig@ | macOS | offline 147d | unassigned — decide: machine or retire |
 | `lima` | suhlig@ | macOS | — | dev workstation (not managed) |
@@ -276,8 +276,9 @@ The scaffold lives at `github.com/uhlig-it/infrastructure/` in this workspace.
 - **Concourse role:** switched from `troykinsella.concourse` to `suhlig.concourse`, a fork with the removed `include` action fixed, installed from git (not Galaxy). `site.yml` now syntax-checks cleanly.
 - **Secrets consolidated:** all 27 `secrets-import/` files are merged. `inventory/group_vars/all/secrets.yml` holds the host-independent secrets (CI tokens, TLS email, metrics passwords, kehrkraft, uhlig.social, concourse, shorts, ytlf, meal-tracker, mosquitto-exporter, shop-alarm). Host-specific secrets live in `inventory/host_vars/<host>/secrets.yml` for opus, shop, pi5, pi0, kunakam, hansahaus, fortcarsta, and wordclock; those hosts now use a `host_vars/<host>/` directory (`main.yml` + `secrets.yml`). The MQTT URLs are service-specific (`mqtt_router_mqtt_url`, `mqtt_gpio_binary_sensor_mqtt_url`, `mqtt_blink1_mqtt_url`) because `mqtt-blink1` and `mqtt-gpio-binary-sensor` use different brokers on `shop`. All nine vault files are encrypted, and `secrets-import/` has been deleted.
 - **Frigate brought under management (2026-10-09):** the 2026-10-08 audit found `opus`'s `/opt/frigate/config/config.yml` was hand-maintained and reproduced by no repo (not even the old `uhlig-it/opus`; its `# Ansible managed` header was stale). `roles/frigate` now renders it: the camera comes from `frigate.cameras` (name → go2rtc source, currently `werkstatt` → `ffmpeg:rtsp://192.168.1.2:8554/cam`), plus the go2rtc restream, `profiles`, `snapshots` and per-camera review. The config is bind-mounted as the `/opt/frigate/config` **directory** (was a single file), the `frigate`/`cameras` vars moved from `host_vars/kunakam` to `host_vars/opus`, and the play moved from `machines/kunakam.yml` to `machines/opus.yml`.
-- **kunakam is obsolete as a camera** and will be retired; the `mediamtx` deployment aspect stays (used by `shop` and `pi0`, from `suhlig.foundation`).
+- **kunakam is offline and currently unused** (last seen 386d ago) but is **kept for revival**: the host stays in the inventory and its mediamtx camera play remains. The `mediamtx` role itself is shared with `shop` and `pi0` (from `suhlig.foundation`).
 - **Shop LAN addressing lives outside this repo:** static DHCP reservations are in `uhlig-it/shop-router/hosts.yml` (OpenWrt `configure.sh`), pinning `shop` → `192.168.1.2`, `pascal` → `.3`, `gosund-*` → `.10/.11/.12`, `sonoff-*` → `.20/.21/.22`, `irlight` → `.30`. The router's dnsmasq also serves those names in LAN DNS (`shop.lan`, `gosund-0.lan`, …) but **not** `.local` (mDNS).
+- **shop-watchdog wireless restart fixed (2026-10-09):** the watchdog restarted `wpa_supplicant dhcpcd`, but the shop Pi runs NetworkManager and has no `dhcpcd`, so that escalation step was a no-op. It now bounces the device with `nmcli device disconnect/connect` (raw link bounce as fallback); deployed to `shop`.
 
 ### Still to do
 
@@ -287,6 +288,4 @@ The scaffold lives at `github.com/uhlig-it/infrastructure/` in this workspace.
 - Retire the deployment-only repos whose playbooks now live here (`kehrkraft-deployment`, `uhlig.social-deployment`, `concourse-deployment`, `tailscale`, and the per-host repos `pi5`, `pi0`, `fortress`, `opus`, `pascal`, `kunakam`, `shop`). `opus` is unblocked (its `shop-alarm` role and the mosquitto guard are folded in) but its GitHub repo is still private and not archived.
 - Delete `deployment/` from the two out-of-workspace site repos (`speisehof/www`, `nowak-reisen/www`).
 - Delete the root-level `playbook.yml` (and `files/`) from `mqtt-blink1` and `tasmota-firmware-proxy`, the two app repos that keep their playbook at the repo root rather than in `deployment/`.
-- Retire `kunakam` as a camera: drop it from `inventory/hosts.yml`, `host_vars/kunakam/`, and the camera play in `machines/kunakam.yml`; keep the `mediamtx` deployment for `shop`/`pi0`.
-- Fix `roles/shop-watchdog/files/watchdog.sh`: it restarts `wpa_supplicant dhcpcd`, but the shop Pi runs NetworkManager and `dhcpcd` is not installed.
 - Drop the shop broker's hardcoded IP: Tasmota `MqttHost` is `192.168.1.2`. The shop router already answers `shop`/`shop.lan` in LAN DNS, so a hostname (not an IP) removes the dependency on the reservation.
