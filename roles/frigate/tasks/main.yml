@@ -1,20 +1,7 @@
-- name: GPG key is trusted
-  apt_key:
-    url: https://packages.cloud.google.com/apt/doc/apt-key.gpg
-    keyring: /etc/apt/trusted.gpg.d/google-keyring.gpg
-  tags: [ apt, key, google, coral, edgetpu ]
-- name: Apt source config for coral-edgetpu is present
-  apt_repository:
-    repo: "{{ item }}"
-    filename: ookla_speedtest-cli
-  with_items:
-    - "deb https://packages.cloud.google.com/apt coral-edgetpu-stable main"
-  tags: [ apt, source, config, google, coral, edgetpu ]
-- name: Edge TPU runtime is installed
-  apt: { name: "{{ packages }}" }
-  vars: { packages: [ libedgetpu1-std ] }
-  become: yes
-  tags: [ apt, google, coral, edgetpu ]
+# The Edge TPU runtime ships inside the Frigate image, so the host needs only the
+# /dev/bus/usb passthrough below -- no host-side driver. The old Google
+# coral-edgetpu apt repo (packages.cloud.google.com) is retired and now returns
+# 403, so it must not be referenced here (it broke `apt update` fleet-wide).
 - name: Frigate directory exists
   ansible.builtin.file:
     path: /opt/frigate
