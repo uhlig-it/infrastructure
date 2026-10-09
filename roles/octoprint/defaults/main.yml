@@ -8,3 +8,7 @@ octoprint_webcam_port: 8080
 octoprint_proxy_listen: "127.0.0.1:8000"
 # FQDN the Tailscale Service publishes (see inventory/host_vars/pascal.yml).
 octoprint_service_fqdn: octoprint.tailnet-204f.ts.net
+# Largest request body nginx accepts. Gcode uploads are tens of MB, but nginx's
+# built-in default is only 1 MB, which 413s them before OctoPrint ever sees the
+# request. 0 disables the limit (as haproxy effectively was).
+octoprint_client_max_body_size: 0
