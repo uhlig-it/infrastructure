@@ -1,0 +1,10 @@
+---
+# OctoPrint reverse proxy. Replaces the retired haproxy: nginx (already present
+# for the webcam) becomes the single local proxy, and the Tailscale Service
+# `svc:octoprint` terminates TLS and forwards to it.
+octoprint_port: 5000
+octoprint_webcam_port: 8080
+# Local HTTP endpoint the Tailscale Service proxies to.
+octoprint_proxy_listen: "127.0.0.1:8000"
+# FQDN the Tailscale Service publishes (see inventory/host_vars/pascal.yml).
+octoprint_service_fqdn: octoprint.tailnet-204f.ts.net

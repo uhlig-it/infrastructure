@@ -1,0 +1,83 @@
+---
+- name: nginx is installed
+  ansible.builtin.apt:
+    name: nginx
+    state: present
+  become: true
+  tags: [ apt, octoprint, proxy ]
+
+- name: OctoPrint reverse proxy site is present
+  ansible.builtin.template:
+    src: nginx-site.conf.j2
+    dest: /etc/nginx/sites-available/octoprint
+    mode: "0644"
+  become: true
+  notify: reload nginx
+  tags: [ octoprint, proxy, config ]
+
+- name: OctoPrint reverse proxy site is enabled
+  ansible.builtin.file:
+    src: /etc/nginx/sites-available/octoprint
+    dest: /etc/nginx/sites-enabled/octoprint
+    state: link
+  become: true
+  notify: reload nginx
+  tags: [ octoprint, proxy, config ]
+
+- name: nginx configuration is valid
+  ansible.builtin.command: nginx -t
+  become: true
+  changed_when: false
+  tags: [ octoprint, proxy, config ]
+
+# Reload now, so a broken config fails here rather than after haproxy is gone.
+- name: nginx configuration is applied
+  ansible.builtin.meta: flush_handlers
+  tags: [ octoprint, proxy, config ]
+
+- name: haproxy is stopped and disabled
+  ansible.builtin.systemd:
+    name: haproxy
+    state: stopped
+    enabled: false
+  become: true
+  failed_when: false
+  tags: [ octoprint, proxy, haproxy ]
+
+- name: haproxy is purged
+  ansible.builtin.apt:
+    name: haproxy
+    state: absent
+    purge: true
+  become: true
+  tags: [ octoprint, proxy, haproxy ]
+
+# The Tailscale Service manages the certificate now; drop the manual cert,
+# its refresh cron/script, and the expiry monitor that existed only for it.
+- name: legacy Tailscale certificate is removed
+  ansible.builtin.file:
+    path: /etc/ssl/pascal.tailnet-204f.ts.net.pem
+    state: absent
+  become: true
+  tags: [ octoprint, proxy, cert ]
+
+- name: legacy certificate refresh cron is removed
+  ansible.builtin.cron:
+    name: refresh-tailscale-cert
+    state: absent
+  become: true
+  tags: [ octoprint, proxy, cert ]
+
+- name: legacy certificate refresh script is removed
+  ansible.builtin.file:
+    path: /usr/local/bin/refresh-tailscale-cert
+    state: absent
+  become: true
+  tags: [ octoprint, proxy, cert ]
+
+- name: is-tls-expiring is removed
+  ansible.builtin.file:
+    path: /opt/is-tls-expiring
+    state: absent
+  become: true
+  tags: [ octoprint, proxy, cert ]

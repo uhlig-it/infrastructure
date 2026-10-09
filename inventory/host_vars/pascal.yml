@@ -1,6 +1,13 @@
 ---
 ansible_user: suhlig
 
-# is-tls-expiring
-is_tls_expiring_hostname: pascal.tailnet-204f.ts.net
-is_tls_expiring_lookahead: 7d
+# A Tailscale Service host must be a tagged node; use the fleet tag like opus.
+tailscale_args: --accept-routes --advertise-tags=tag:server
+
+# OctoPrint is published as a Tailscale Service: Tailscale terminates TLS and
+# provisions/renews the certificate (see playbooks/fleet/tailscale.yml and
+# roles/octoprint). Reachable at https://octoprint.tailnet-204f.ts.net.
+tailscale_services:
+  - name: svc:octoprint
+    port: 443
+    backend: http://127.0.0.1:8000

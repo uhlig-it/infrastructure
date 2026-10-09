@@ -19,3 +19,12 @@ app_source: ""
 i2c_bus: 1
 metrics:
   port: 9104
+
+# Unattended upgrades (role `hifis.toolkit.unattended_upgrades`, pulled in via
+# suhlig.foundation.minimal). The role's Debian default only covers the Debian
+# security archive; add the Tailscale repo (origin/label `Tailscale`) so
+# tailscaled keeps updating too.
+unattended_origins_patterns:
+  - "origin=Debian,codename=${distro_codename},label=Debian-Security"
+  - "origin=Debian,codename=${distro_codename}-security,label=Debian-Security"
+  - "origin=Tailscale,codename=${distro_codename},label=Tailscale"

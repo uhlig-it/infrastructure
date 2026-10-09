@@ -1,0 +1,11 @@
+---
+galaxy_info:
+  role_name: octoprint
+  author: Steffen Uhlig <steffen@familie-uhlig.net>
+  description: OctoPrint reverse proxy (nginx) replacing haproxy, published via a Tailscale Service
+  license: MIT
+  min_ansible_version: "2.9"
+  platforms:
+    - name: Debian
+      versions: [ 11, 12, 13 ]
+dependencies: []
