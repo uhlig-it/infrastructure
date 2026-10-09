@@ -1,0 +1,60 @@
+---
+- name: go2rtc config directory exists
+  ansible.builtin.file:
+    path: /etc/go2rtc
+    state: directory
+    mode: "0755"
+  become: true
+  tags: [ go2rtc, config ]
+
+- name: go2rtc binary is installed
+  ansible.builtin.get_url:
+    url: "https://github.com/AlexxIT/go2rtc/releases/download/{{ go2rtc_version }}/go2rtc_linux_{{ go2rtc_arch[ansible_facts['architecture']] }}"
+    dest: /usr/local/bin/go2rtc
+    mode: "0755"
+    owner: root
+    group: root
+  become: true
+  tags: [ go2rtc, binary ]
+
+# go2rtc needs ffmpeg >= 5; install a static build where the distro one is too
+# old (e.g. Debian bullseye's 4.3) and transcoding is required.
+- name: Static ffmpeg is installed
+  ansible.builtin.shell:
+    cmd: |
+      set -e
+      tmp="$(mktemp -d)"
+      trap 'rm -rf "$tmp"' EXIT
+      curl -fsSL "{{ go2rtc_ffmpeg_url }}" | tar -xJ -C "$tmp"
+      install -m0755 "$(find "$tmp" -maxdepth 2 -type f -name ffmpeg | head -1)" "{{ go2rtc_ffmpeg_bin }}"
+    creates: "{{ go2rtc_ffmpeg_bin }}"
+  become: true
+  when: go2rtc_ffmpeg_url | length > 0
+  tags: [ go2rtc, ffmpeg ]
+
+- name: go2rtc configuration is present
+  ansible.builtin.template:
+    src: go2rtc.yaml.j2
+    dest: /etc/go2rtc/go2rtc.yaml
+    mode: "0644"
+  become: true
+  notify: restart go2rtc
+  tags: [ go2rtc, config ]
+
+- name: go2rtc service unit is present
+  ansible.builtin.template:
+    src: go2rtc.service.j2
+    dest: /etc/systemd/system/go2rtc.service
+    mode: "0644"
+  become: true
+  notify: restart go2rtc
+  tags: [ go2rtc, config ]
+
+- name: go2rtc is enabled and running
+  ansible.builtin.systemd:
+    name: go2rtc
+    enabled: true
+    state: started
+    daemon_reload: true
+  become: true
+  tags: [ go2rtc ]

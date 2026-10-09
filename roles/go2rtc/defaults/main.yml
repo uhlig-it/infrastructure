@@ -1,0 +1,18 @@
+---
+# go2rtc streaming server. Used to republish a local camera (e.g. a USB/UVC
+# webcam behind mjpg-streamer, which mediamtx cannot read) as RTSP so Frigate
+# can consume it.
+go2rtc_version: v1.9.14
+go2rtc_arch:
+  armv6l: arm
+  armv7l: arm
+  aarch64: arm64
+  x86_64: amd64
+# name -> source, rendered into the `streams:` block.
+go2rtc_streams: {}
+
+# Optional: a static ffmpeg to transcode with. go2rtc refuses ffmpeg < 5, and
+# Debian bullseye ships 4.3, so hosts that need mjpeg->h264 transcoding point
+# go2rtc at a self-contained build.
+go2rtc_ffmpeg_bin: ""
+go2rtc_ffmpeg_url: ""

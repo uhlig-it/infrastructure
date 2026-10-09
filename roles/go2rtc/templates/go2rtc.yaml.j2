@@ -1,0 +1,12 @@
+# {{ ansible_managed }}
+log:
+  level: info
+{% if go2rtc_ffmpeg_bin %}
+ffmpeg:
+  bin: {{ go2rtc_ffmpeg_bin }}
+{% endif %}
+
+streams:
+{% for name, source in go2rtc_streams.items() %}
+  {{ name }}: {{ source }}
+{% endfor %}

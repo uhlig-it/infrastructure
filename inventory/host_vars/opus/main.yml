@@ -2,7 +2,7 @@
 ansible_user: suhlig
 
 # Home server: subnet router for the 192.168.10.0/24 LAN and the tailnet exit node.
-tailscale_args: --advertise-routes=192.168.10.0/24 --advertise-exit-node --accept-dns=false --accept-routes --operator=suhlig
+tailscale_args: --advertise-routes=192.168.10.0/24 --advertise-exit-node --accept-dns=true --accept-routes --operator=suhlig
 
 # Tailscale Services published from this host.
 tailscale_services:

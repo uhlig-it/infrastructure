@@ -28,3 +28,6 @@
     - role: octoprint
       become: true
       tags: [ octoprint, proxy ]
+    - role: go2rtc
+      become: true
+      tags: [ go2rtc ]

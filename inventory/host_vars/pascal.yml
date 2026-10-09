@@ -11,3 +11,12 @@ tailscale_services:
   - name: svc:octoprint
     port: 443
     backend: http://127.0.0.1:8000
+
+# Republish the OctoPrint webcam (mjpg-streamer) as RTSP for Frigate, since
+# mediamtx cannot read this USB/UVC camera (roles/go2rtc). The C270 is MJPEG,
+# so go2rtc transcodes to H264 for Frigate; bullseye's ffmpeg is too old
+# (go2rtc needs >= 5), hence the static build.
+go2rtc_ffmpeg_url: https://johnvansickle.com/ffmpeg/releases/ffmpeg-release-armhf-static.tar.xz
+go2rtc_ffmpeg_bin: /usr/local/bin/ffmpeg-static
+go2rtc_streams:
+  printer: ffmpeg:http://127.0.0.1:8080/?action=stream#video=h264
