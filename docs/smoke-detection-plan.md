@@ -25,7 +25,7 @@ An ESP32 (a few euros, Wi-Fi built in) captures the mic locally over that short 
 - **Detection only** for now; no alerting integration yet.
 - **Unlock gating (shop only):** the shop stream is disabled by the same `disarmed` profile that motion already uses (Frigate profiles can override the `audio` section); `shop-alarm` already switches the profile on lock/unlock, so it needs no change. The home node listens continuously.
 - **Repo: keep everything in `infrastructure`.** No application code — hardware enablement, a thin stream, and config — so this matches the consolidation principle in `docs/consolidation-plan.md`.
-- **Retire the Pi path.** The `i2s-mic` role's boot-config tasks and `ha-kiosk`'s go2rtc mic stream are superseded by the ESP32 node; `ha-kiosk`'s Pi audio config is to be reverted once a node is proven.
+- **Retire the Pi path.** The `i2s-mic` role's boot-config tasks and `ha-kiosk`'s go2rtc mic stream are superseded by the ESP32 node. Done: the role's Pi tasks are removed (its directory now holds only the wiring diagram) and `ha-kiosk` is reverted in the repo — the `i2s-mic` and `go2rtc` roles are gone from its play and its mic stream removed.
 
 ## Architecture
 
@@ -56,28 +56,28 @@ flowchart LR
 | WS (LRCLK) | IO25 | word select (ESP32 output) |
 | SD (DIN) | IO33 | mic data into the ESP32 |
 
-The diagram is rendered by [wiregen](https://github.com/WeebLabs/wiregen) from [`roles/i2s-mic/inmp441-esp32.yaml`](../roles/i2s-mic/inmp441-esp32.yaml), using the `suhlig/wiregen` fork until its new INMP441, Raspberry Pi 3 and ESP32-DevKitC V4 parts are merged upstream. It lives with the role directory (see Phase 0); the earlier INMP441→Pi 3 diagram is superseded.
+The diagram is rendered by [wiregen](https://github.com/WeebLabs/wiregen) from [`roles/i2s-mic/inmp441-esp32.yaml`](../roles/i2s-mic/inmp441-esp32.yaml), using the `suhlig/wiregen` fork until its new INMP441, Raspberry Pi 3 and ESP32-DevKitC V4 parts are merged upstream. It lives in the role directory, which now holds only this diagram; the earlier INMP441→Pi 3 diagram is superseded.
 
 ## Facts already gathered
 
-- **Pi prototype (superseded):** `ha-kiosk` (Pi 4, Debian trixie) ran the INMP441 directly — the `i2s-mic` role set `dtoverlay=googlevoicehat-soundcard` + `dtparam=audio=off` in `/boot/firmware/config.txt`, `arecord -l` showed `card 0: snd_rpi_googlevoicehat_soundcard`, and go2rtc published `rtsp://ha-kiosk:8554/mic` (AAC 48 kHz mono, left channel) with its listeners bound to the tailnet address. This proved the mic and the mic→go2rtc→RTSP→Frigate shape. Under the ESP32 decision it is retired.
+- **Pi prototype (superseded):** `ha-kiosk` (Pi 4, Debian trixie) ran the INMP441 directly — the `i2s-mic` role set `dtoverlay=googlevoicehat-soundcard` + `dtparam=audio=off` in `/boot/firmware/config.txt`, `arecord -l` showed `card 0: snd_rpi_googlevoicehat_soundcard`, and go2rtc published `rtsp://ha-kiosk:8554/mic` (AAC 48 kHz mono, left channel) with its listeners bound to the tailnet address. This proved the mic and the mic→go2rtc→RTSP→Frigate shape. Under the ESP32 decision it is retired: the Pi-side setup has been removed and `ha-kiosk` reverted.
 - **Workshop WLAN / reachability (verified):** the workshop WLAN is the `shop-router` LAN, `192.168.1.0/24`. `shop` advertises that route (`--advertise-routes=192.168.1.0/24 --accept-routes`) and `opus` accepts routes (`--accept-routes`), so `opus` reaches it. `http://192.168.1.10/` (a Tasmota plug on that LAN) answers `401` with `WWW-Authenticate: Basic realm="Login Required"`, confirming the route is approved *and* that a Basic-auth device is reachable from the tailnet. `shop`'s `net.ipv4.ip_forward` is `1`.
 - **DHCP reservations (shop):** `github.com/uhlig-it/shop-router` holds `hosts.yml` (`name`/`mac`/`ip`), applied by `configure.sh`; adding the ESP32 is one entry.
 - **Frigate:** runs `ghcr.io/blakeblackshear/frigate:stable` (0.15) with a USB Coral at `opus`; cameras come from `frigate.cameras` (currently vaulted in `inventory/host_vars/opus/secrets.yml`) and are rendered by `roles/frigate/templates/config.yml.j2`, which emits only `detect` + `record`. Audio labels `smoke_detector` and `fire_alarm` exist; profiles can override the `audio` section.
 
 ## Work plan
 
-### Phase 0 — role scaffold + Pi prototype (done; superseded)
+### Phase 0 — role scaffold + Pi prototype (done; reverted)
 
-The `i2s-mic` role directory was created to hold the wiring diagram; the INMP441→Pi 3 diagram (wiregen) was added and CI-rendered. On `ha-kiosk` the boot config was set, a reboot loaded the overlay, and `arecord -l` confirmed the capture card. This validated the microphone. The diagram now targets the ESP32; the Pi boot-config work remains only as history.
+The `i2s-mic` role directory was created to hold the wiring diagram; the INMP441→Pi 3 diagram (wiregen) was added and CI-rendered. On `ha-kiosk` the boot config was set, a reboot loaded the overlay, and `arecord -l` confirmed the capture card. This validated the microphone. The diagram now targets the ESP32 and is all the directory holds; the Pi boot-config work is reverted.
 
-### Phase 1 — the i2s-mic role's tasks (done; superseded)
+### Phase 1 — the i2s-mic role's tasks (done; removed)
 
-The role manages the Pi's boot config (`/boot/firmware/config.txt` on Bookworm, `/boot/config.txt` on bullseye): `dtparam=audio=off`, `dtoverlay=googlevoicehat-soundcard`, keep `i2c_arm=on`, a reboot handler, and an `arecord -l` assertion. Superseded by the ESP32 node; to be retired (and `ha-kiosk`'s Pi audio config reverted) once a node is proven.
+The role managed the Pi's boot config (`/boot/firmware/config.txt` on Bookworm, `/boot/config.txt` on bullseye): `dtparam=audio=off`, `dtoverlay=googlevoicehat-soundcard`, keep `i2c_arm=on`, a reboot handler, and an `arecord -l` assertion. Superseded by the ESP32 node and now removed; the role directory holds only the wiring diagram.
 
-### Phase 2 — the Pi audio stream (done; superseded)
+### Phase 2 — the Pi audio stream (done; reverted)
 
-go2rtc on `ha-kiosk` published the mic as `rtsp://ha-kiosk:8554/mic` using an ffmpeg `exec:` source (native `alsa:` only emits raw S16LE and go2rtc's `ffmpeg:` source would not produce), AAC mono, with the listeners tailnet-bound. Superseded: with a streaming ESP32 the stream originates at the node and no go2rtc runs on the sensor side.
+go2rtc on `ha-kiosk` published the mic as `rtsp://ha-kiosk:8554/mic` using an ffmpeg `exec:` source (native `alsa:` only emits raw S16LE and go2rtc's `ffmpeg:` source would not produce), AAC mono, with the listeners tailnet-bound. Superseded: with a streaming ESP32 the stream originates at the node and no go2rtc runs on the sensor side. Reverted in the repo — the `go2rtc` role and mic stream are removed from `ha-kiosk` (its installed service and the `config.txt` overlay are cleaned up on the host when it is next touched).
 
 ### Phase 3 — ESP32 sensor node (current)
 
@@ -104,7 +104,6 @@ Wire `shop-alarm`/HA to act on Frigate `smoke_detector`/`fire_alarm` events. Dep
 - **Streamer firmware:** which OSS RTSP/HTTP audio streamer, whether it offers Digest auth, a stable RTSP URL, and buffering that survives Wi-Fi jitter. To select and prove on the bench.
 - **Audio-only in Frigate:** Frigate normally ties audio to a camera that also has video, but the living room has no camera. Decide how to expose the node to `opus` — a synthetic/placeholder detect input, or an audio-only camera if Frigate 0.15 accepts one.
 - **`min_volume`:** unknown until we can sample the detectors; tune on the node.
-- **`i2s-mic` role disposition:** once the ESP32 path works, decide whether to delete the role (its directory would then hold only the wiring diagram) and where the diagram should live.
 
 ## Related / out of scope
 

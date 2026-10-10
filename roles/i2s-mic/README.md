@@ -1,33 +1,8 @@
 # i2s-mic
 
-Ansible role that enables an **INMP441 I2S MEMS microphone** on a Raspberry Pi by managing `/boot/firmware/config.txt`, part of the smoke-detection work (see [`../../docs/smoke-detection-plan.md`](../../docs/smoke-detection-plan.md)).
+Documentation for the **INMP441 I2S MEMS microphone** used by the smoke-detection work — see [`../../docs/smoke-detection-plan.md`](../../docs/smoke-detection-plan.md).
 
-> **Status:** the project's deployment path has moved to standalone ESP32 nodes, so this role's Pi boot-config tasks are superseded — kept only as the prototype that validated the microphone. The directory also holds the current wiring diagram.
-
-## What it does
-
-- Disables the onboard analog audio (`dtparam=audio=off`), freeing the I2S/PCM block the `bcm2835` driver would otherwise claim.
-- Keeps the I2C bus enabled (`dtparam=i2c_arm=on`); I2C (GPIO2/3) and I2S (GPIO18/19/20) do not conflict.
-- Enables the capture device with a device-tree overlay (`dtoverlay=googlevoicehat-soundcard`), placed in the `[all]` section so it applies to every model.
-- Reboots when the boot config changes (an overlay loads only at boot), then asserts that `arecord -l` shows a capture card.
-
-## Variables
-
-| Variable | Default | Description |
-| --- | --- | --- |
-| `i2s_mic_config_txt` | `/boot/firmware/config.txt` | Boot config to manage. |
-| `i2s_mic_overlay` | `googlevoicehat-soundcard` | Capture overlay; fall back to `audioinjector-bare-i2s`, or `dtparam=i2s=on` plus a matching overlay. |
-| `i2s_mic_keep_i2c` | `true` | Keep `dtparam=i2c_arm=on`. |
-| `i2s_mic_reboot` | `true` | Reboot on change, then verify the capture card. Set `false` to converge without rebooting. |
-
-## Example
-
-```yaml
-- hosts: ha-kiosk
-  roles:
-    - role: i2s-mic
-      tags: [i2s-mic]
-```
+> **Status:** the deployment path moved to standalone **ESP32 nodes**, so the Raspberry Pi boot-config role (managing `dtoverlay=googlevoicehat-soundcard` + `dtparam=audio=off` in `/boot/firmware/config.txt`) has been removed and `ha-kiosk` reverted. What remains here is the wiring diagram; role content for the ESP32 sensor node will be added later.
 
 ## Wiring diagram
 
@@ -56,7 +31,7 @@ Confirm they load with `wiregen list-parts` / `wiregen describe-part inmp441`.
 
 ## Why wiregen
 
-The requirement was a wiring diagram that is **text-source, diffable, and renders a real board** — the INMP441 wired to the ESP32 node, kept alongside the code that deploys the sensor. wiregen fits that exactly: a small YAML describes parts and pin-to-pin wiring, the engine owns every pixel, the part library is easy to extend, and buses collapse into one shorthand with role-coloured wires and an auto-generated checklist. It keeps the diagram in git next to the Ansible code, with no GUI round-trip and no cloud.
+The requirement was a wiring diagram that is **text-source, diffable, and renders a real board** — the INMP441 wired to the ESP32 node, kept alongside the code that deploys the sensor. wiregen fits that exactly: a small YAML describes parts and pin-to-pin wiring, the engine owns every pixel, the part library is easy to extend, and buses collapse into one shorthand with role-coloured wires and an auto-generated checklist. It keeps the diagram in git next to the rest of the work, with no GUI round-trip and no cloud.
 
 ## Why not the alternatives
 
