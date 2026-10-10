@@ -16,7 +16,7 @@ An ESP32 (a few euros, Wi-Fi built in) captures the mic locally over that short 
 
 - **Sensor node: ESP32-DevKitC V4** (Espressif, ESP32-WROOM-32). One per site, powered from a USB supply and joined to the local WLAN.
 - **Mic: INMP441**, on the ESP32's I2S0 peripheral, wired with a short harness (see the wiring table).
-- **Transport: a dedicated RTSP/HTTP streamer firmware** on the ESP32 — *not* ESPHome (ESPHome reads the mic but has no audio *server*), chosen so Frigate's bundled go2rtc can pull it like any camera. Selected: an audio-only RTSP sketch on **`rjsachse/ESP32-RTSPServer`** (a generic-ESP32 library with RTSP Basic auth); see [`../roles/i2s-mic/firmware.md`](../roles/i2s-mic/firmware.md).
+- **Transport: a dedicated RTSP/HTTP streamer firmware** on the ESP32 — *not* ESPHome (ESPHome reads the mic but has no audio *server*), chosen so Frigate's bundled go2rtc can pull it like any camera. Selected: an audio-only RTSP sketch on **`rjsachse/ESP32-RTSPServer`** (a generic-ESP32 library with RTSP Basic auth); see [`uhlig-it/esp32-mic-node`](https://github.com/uhlig-it/esp32-mic-node).
 - **Auth: HTTP Basic** on the stream. Sufficient because the stream is only pulled by `opus` over the tailnet (and, in the shop, only across the shop-router WLAN), so the WLAN/tailnet is the trust boundary rather than the credential. Use an isolated/IoT SSID where practical, and upgrade to Digest if the chosen firmware supports it.
 - **Stable addressing: a DHCP reservation** — in the shop via `github.com/uhlig-it/shop-router` (`hosts.yml`, installed by `configure.sh`); at home via the router's reservation or a static IP — so the Frigate URL never moves.
 - **Reachability (shop): over the tailnet, via `shop`'s subnet router.** The workshop WLAN *is* the `shop-router` LAN, `192.168.1.0/24`; `shop` advertises that route and `opus` runs `--accept-routes`, so `opus` reaches a `192.168.1.x` ESP32 directly and Frigate pulls its stream with no relay on `shop`/`pascal`.
@@ -24,8 +24,8 @@ An ESP32 (a few euros, Wi-Fi built in) captures the mic locally over that short 
 - **Frigate camera vars: refactor** them out of the vaulted `inventory/host_vars/opus/secrets.yml` into plaintext `inventory/host_vars/opus/main.yml`, bridging only the MQTT password from the vault. Camera URLs are not secret; this avoids editing the vault on every camera change.
 - **Detection only** for now; no alerting integration yet.
 - **Unlock gating (shop only):** the shop stream is disabled by the same `disarmed` profile that motion already uses (Frigate profiles can override the `audio` section); `shop-alarm` already switches the profile on lock/unlock, so it needs no change. The home node listens continuously.
-- **Repo: keep everything in `infrastructure`.** No application code — hardware enablement, a thin stream, and config — so this matches the consolidation principle in `docs/consolidation-plan.md`.
-- **Retire the Pi path.** The `i2s-mic` role's boot-config tasks and `ha-kiosk`'s go2rtc mic stream are superseded by the ESP32 node. Done: the role's Pi tasks are removed (its directory now holds only the wiring diagram) and `ha-kiosk` is fully reverted — the `i2s-mic` and `go2rtc` roles are gone from its play, its mic stream removed, and the host cleaned up (overlay removed, `go2rtc` uninstalled, rebooted).
+- **Repo: split.** The node's firmware and its wiring diagram live in [`uhlig-it/esp32-mic-node`](https://github.com/uhlig-it/esp32-mic-node); this repo keeps the plan and the Frigate/Ansible config. A PlatformIO build, a released `.bin`, and the likelihood of patching a dormant upstream make the firmware application code — which the consolidation principle puts in its own repo (`docs/consolidation-plan.md`).
+- **Retire the Pi path.** The `i2s-mic` role's boot-config tasks and `ha-kiosk`'s go2rtc mic stream are superseded by the ESP32 node. Done: the role's Pi tasks are removed (its directory is gone — the node's firmware and diagram moved to `uhlig-it/esp32-mic-node`) and `ha-kiosk` is fully reverted — the `i2s-mic` and `go2rtc` roles are gone from its play, its mic stream removed, and the host cleaned up (overlay removed, `go2rtc` uninstalled, rebooted).
 
 ## Architecture
 
@@ -56,7 +56,7 @@ flowchart LR
 | WS (LRCLK) | IO25 | word select (ESP32 output) |
 | SD (DIN) | IO33 | mic data into the ESP32 |
 
-The diagram is rendered by [wiregen](https://github.com/WeebLabs/wiregen) from [`roles/i2s-mic/inmp441-esp32.yaml`](../roles/i2s-mic/inmp441-esp32.yaml), using the `suhlig/wiregen` fork until its new INMP441, Raspberry Pi 3 and ESP32-DevKitC V4 parts are merged upstream. It lives in the role directory, which now holds only this diagram; the earlier INMP441→Pi 3 diagram is superseded.
+The diagram is rendered by [wiregen](https://github.com/WeebLabs/wiregen) from [`diagrams/inmp441-esp32.yaml`](https://github.com/uhlig-it/esp32-mic-node/blob/main/diagrams/inmp441-esp32.yaml) in [`uhlig-it/esp32-mic-node`](https://github.com/uhlig-it/esp32-mic-node), using the `suhlig/wiregen` fork until its new INMP441, Raspberry Pi 3 and ESP32-DevKitC V4 parts are merged upstream. The node's firmware lives there too; the earlier INMP441→Pi 3 diagram is superseded.
 
 ## Facts already gathered
 
@@ -69,11 +69,11 @@ The diagram is rendered by [wiregen](https://github.com/WeebLabs/wiregen) from [
 
 ### Phase 0 — role scaffold + Pi prototype (done; reverted)
 
-The `i2s-mic` role directory was created to hold the wiring diagram; the INMP441→Pi 3 diagram (wiregen) was added and CI-rendered. On `ha-kiosk` the boot config was set, a reboot loaded the overlay, and `arecord -l` confirmed the capture card. This validated the microphone. The diagram now targets the ESP32 and is all the directory holds; the Pi boot-config work is reverted.
+The `i2s-mic` role directory was created to hold the wiring diagram; the INMP441→Pi 3 diagram (wiregen) was added and CI-rendered. On `ha-kiosk` the boot config was set, a reboot loaded the overlay, and `arecord -l` confirmed the capture card. This validated the microphone. The diagram now targets the ESP32; it and the node's firmware have since moved to `uhlig-it/esp32-mic-node`. The Pi boot-config work is reverted.
 
 ### Phase 1 — the i2s-mic role's tasks (done; removed)
 
-The role managed the Pi's boot config (`/boot/firmware/config.txt` on Bookworm, `/boot/config.txt` on bullseye): `dtparam=audio=off`, `dtoverlay=googlevoicehat-soundcard`, keep `i2c_arm=on`, a reboot handler, and an `arecord -l` assertion. Superseded by the ESP32 node and now removed; the role directory holds only the wiring diagram.
+The role managed the Pi's boot config (`/boot/firmware/config.txt` on Bookworm, `/boot/config.txt` on bullseye): `dtparam=audio=off`, `dtoverlay=googlevoicehat-soundcard`, keep `i2c_arm=on`, a reboot handler, and an `arecord -l` assertion. Superseded by the ESP32 node and now removed; the role directory is gone and the node's firmware and diagram moved to `uhlig-it/esp32-mic-node`.
 
 ### Phase 2 — the Pi audio stream (done; reverted)
 
@@ -81,7 +81,7 @@ go2rtc on `ha-kiosk` published the mic as `rtsp://ha-kiosk:8554/mic` using an ff
 
 ### Phase 3 — ESP32 sensor node (current)
 
-- Flash the selected streamer: an audio-only RTSP sketch on `rjsachse/ESP32-RTSPServer` (see [`../roles/i2s-mic/firmware.md`](../roles/i2s-mic/firmware.md)). It serves `rtsp://<node>:554/` — `L16` mono PCM — with RTSP Basic auth.
+- Flash the node firmware from [`uhlig-it/esp32-mic-node`](https://github.com/uhlig-it/esp32-mic-node) (an audio-only RTSP sketch on a vendored `rjsachse/ESP32-RTSPServer`). It serves `rtsp://<node>:554/` — `L16` mono PCM — with RTSP Basic auth.
 - Wire the INMP441 per the diagram; power the board; join the WLAN.
 - Give the node a stable address: a reservation in `shop-router/hosts.yml` for the shop; a reservation or static address at home.
 - Prove `opus` can pull it over the tailnet (`ffprobe`/`ffplay` the URL) before touching Frigate.
