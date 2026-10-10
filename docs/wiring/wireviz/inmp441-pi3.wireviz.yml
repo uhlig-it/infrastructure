@@ -1,0 +1,69 @@
+# WireViz source for the INMP441 -> Raspberry Pi 3 wiring.
+#
+# Render with:  wireviz inmp441-pi3.wireviz.yml
+# Produces:     inmp441-pi3.wireviz.svg / .png / .bom.tsv / .html
+#
+# Authoritative pinout for the smoke-detection project (see
+# ../smoke-detection-plan.md). Only the six pins actually used are listed on
+# the Pi side; the header has 40 pins in total.
+
+metadata:
+  title: INMP441 I2S microphone -> Raspberry Pi 3
+  description: >-
+    I2S MEMS microphone to the Pi 3 I2S/PCM block (GPIO18/19/20). L/R is tied
+    to GND, which selects the left channel.
+
+options:
+  color_mode: SHORT
+
+connectors:
+  Pi3:
+    type: Raspberry Pi 3 Model B
+    subtype: J8 40-pin GPIO header (only the 6 used pins shown)
+    pins: [1, 6, 9, 12, 35, 38]
+    pinlabels:
+      - 3V3
+      - GND
+      - GND
+      - GPIO18 / PCM_CLK (BCLK)
+      - GPIO19 / PCM_FS (LRCLK)
+      - GPIO20 / PCM_DIN (SD)
+    pincolors: [RD, BK, BK, YE, GN, BU]
+  Mic:
+    type: INMP441
+    subtype: I2S MEMS microphone breakout
+    pinlabels: [VDD, GND, "L/R", SCK, WS, SD]
+
+cables:
+  Jumpers:
+    category: bundle
+    gauge: 0.25 mm2
+    length: 0.15
+    colors: [RD, BK, BK, YE, GN, BU]
+    wirelabels: [VDD, GND, LR, SCK, WS, SD]
+
+connections:
+  -
+    - Pi3: 1
+    - Jumpers: 1
+    - Mic: VDD
+  -
+    - Pi3: 6
+    - Jumpers: 2
+    - Mic: GND
+  -
+    - Pi3: 9
+    - Jumpers: 3
+    - Mic: "L/R"
+  -
+    - Pi3: 12
+    - Jumpers: 4
+    - Mic: SCK
+  -
+    - Pi3: 35
+    - Jumpers: 5
+    - Mic: WS
+  -
+    - Pi3: 38
+    - Jumpers: 6
+    - Mic: SD

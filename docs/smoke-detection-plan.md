@@ -43,6 +43,8 @@ flowchart LR
 | WS (LRCLK) | 35 | GPIO19 |
 | SD (DIN) | 38 | GPIO20 |
 
+The wiring diagram is rendered by [wiregen](https://github.com/WeebLabs/wiregen) from [`docs/wiring/wiregen/inmp441-pi3.yaml`](wiring/wiregen/inmp441-pi3.yaml), using the `suhlig/wiregen` fork until its new INMP441 and Raspberry Pi 3 parts are merged upstream. See [`docs/wiring/`](wiring/README.md).
+
 ## Facts already gathered
 
 - `shop` is a Pi 3 Model B Rev 1.2, Raspbian 12 Bookworm, kernel 6.12 (`+rpt-rpi-v7`). `pascal` is a Pi 3 as well.

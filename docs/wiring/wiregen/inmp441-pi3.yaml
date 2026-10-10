@@ -1,0 +1,45 @@
+title: INMP441 I2S microphone → Raspberry Pi 3
+subtitle: I2S MEMS mic on the Pi's I2S/PCM block (GPIO18 / GPIO19 / GPIO20)
+grid: true
+
+parts:
+  mic:
+    part: inmp441
+    region: left
+    label: INMP441
+  pi:
+    part: raspberry-pi-3
+    region: right
+    label: Raspberry Pi 3
+
+connections:
+  # the three I2S lines, expanded and coloured per role (BCLK / LRCLK / Data)
+  - bus: i2s
+    from: pi
+    to: mic
+    map:
+      GPIO18: SCK
+      GPIO19: WS
+      GPIO20: SD
+  # power and channel select
+  - { from: pi.3V3, to: mic.VDD, route: bottom }
+  - { from: pi.GND, to: mic.GND }
+  - { from: pi.GND, to: mic.L/R }
+
+annotations:
+  - card: Pi 3 ↔ INMP441
+    rows:
+      VDD: 3V3 (Pi pin 1 or 17)
+      GND: GND
+      "L/R": GND — selects the left channel
+      SCK: GPIO18 / BCLK (pin 12)
+      WS: GPIO19 / LRCLK (pin 35)
+      SD: GPIO20 / DIN (pin 38)
+  - card: Notes
+    text: >-
+      VDD is 3V3 only — never feed 5V. Tying L/R to GND selects the left
+      channel; leave it high to select the right channel.
+
+      Enabling I2S needs dtoverlay=googlevoicehat-soundcard and
+      dtparam=audio=off in /boot/firmware/config.txt; see
+      docs/smoke-detection-plan.md.
