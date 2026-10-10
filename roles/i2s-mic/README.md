@@ -46,7 +46,7 @@ wiregen render roles/i2s-mic/inmp441-pi3.yaml --table
 
 We use wiregen via the **fork until the INMP441 and Raspberry Pi 3 parts land upstream** (`github.com/suhlig/wiregen`, branch `add-smoke-detection-via-INMP441`). There is already an unmerged `add-pcm5102A` branch on the fork, and the upstream author is responsive, so the parts are meant as contributions rather than a permanent fork. Two parts were added to the fork's library (`wiregen/parts/`):
 
-- `inmp441` — INMP441 breakout (VDD, GND, L/R, SCK, WS, SD).
+- `inmp441` — INMP441 breakout, the common round blue PCB drawn as a circle with its alignment notch and two rows of three pads (SCK, WS, L/R and SD, VDD, GND).
 - `raspberry-pi-3` — Raspberry Pi 3 Model B, the 40-pin J8 header drawn as its two physical rows (odd pins left, even pins right).
 
 Confirm they load with `wiregen list-parts` / `wiregen describe-part inmp441`.
