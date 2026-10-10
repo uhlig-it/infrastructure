@@ -25,7 +25,7 @@ An ESP32 (a few euros, Wi-Fi built in) captures the mic locally over that short 
 - **Detection only** for now; no alerting integration yet.
 - **Unlock gating (shop only):** the shop stream is disabled by the same `disarmed` profile that motion already uses (Frigate profiles can override the `audio` section); `shop-alarm` already switches the profile on lock/unlock, so it needs no change. The home node listens continuously.
 - **Repo: keep everything in `infrastructure`.** No application code — hardware enablement, a thin stream, and config — so this matches the consolidation principle in `docs/consolidation-plan.md`.
-- **Retire the Pi path.** The `i2s-mic` role's boot-config tasks and `ha-kiosk`'s go2rtc mic stream are superseded by the ESP32 node. Done: the role's Pi tasks are removed (its directory now holds only the wiring diagram) and `ha-kiosk` is reverted in the repo — the `i2s-mic` and `go2rtc` roles are gone from its play and its mic stream removed.
+- **Retire the Pi path.** The `i2s-mic` role's boot-config tasks and `ha-kiosk`'s go2rtc mic stream are superseded by the ESP32 node. Done: the role's Pi tasks are removed (its directory now holds only the wiring diagram) and `ha-kiosk` is fully reverted — the `i2s-mic` and `go2rtc` roles are gone from its play, its mic stream removed, and the host cleaned up (overlay removed, `go2rtc` uninstalled, rebooted).
 
 ## Architecture
 
@@ -77,7 +77,7 @@ The role managed the Pi's boot config (`/boot/firmware/config.txt` on Bookworm, 
 
 ### Phase 2 — the Pi audio stream (done; reverted)
 
-go2rtc on `ha-kiosk` published the mic as `rtsp://ha-kiosk:8554/mic` using an ffmpeg `exec:` source (native `alsa:` only emits raw S16LE and go2rtc's `ffmpeg:` source would not produce), AAC mono, with the listeners tailnet-bound. Superseded: with a streaming ESP32 the stream originates at the node and no go2rtc runs on the sensor side. Reverted in the repo — the `go2rtc` role and mic stream are removed from `ha-kiosk` (its installed service and the `config.txt` overlay are cleaned up on the host when it is next touched).
+go2rtc on `ha-kiosk` published the mic as `rtsp://ha-kiosk:8554/mic` using an ffmpeg `exec:` source (native `alsa:` only emits raw S16LE and go2rtc's `ffmpeg:` source would not produce), AAC mono, with the listeners tailnet-bound. Superseded: with a streaming ESP32 the stream originates at the node and no go2rtc runs on the sensor side. Reverted: the `go2rtc` role and mic stream were removed from `ha-kiosk`, and on 2026-10-10 its host was cleaned up — the `config.txt` overlay removed, `dtparam=audio` restored, `go2rtc` uninstalled, and the host rebooted (confirmed: no capture card, onboard `bcm2835` audio back).
 
 ### Phase 3 — ESP32 sensor node (current)
 

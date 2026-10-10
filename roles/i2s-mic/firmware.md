@@ -95,6 +95,28 @@ Bench notes:
 - The INMP441 delivers 24-bit samples in a 32-bit frame; if the 16-bit path above is quiet or clipped, read `I2S_DATA_BIT_WIDTH_32BIT` and shift right to match the level (the mic's data is MSB-aligned). Tune gain here.
 - Verify before touching Frigate: `ffprobe -rtsp_transport tcp rtsp://<user>:<pass>@<node-ip>:554/` (and `ffplay`) should report an `L16` mono audio stream.
 
+## Bench checklist
+
+Fast path from parts to a tested stream (see the wiring diagram and the sketch above).
+
+1. **Wire** the INMP441 to the DevKitC per *Configuration*: `VDD`→3V3, `GND`→GND, `L/R`→GND (left channel), `SCK`→IO26, `WS`→IO25, `SD`→IO33. Six short (< 10 cm) jumpers, routed away from the antenna. Power the mic from **3V3 only — never 5 V**.
+2. **Toolchain:** Arduino IDE 2.x (or `arduino-cli`), Espressif **ESP32** boards **≥ 3.1.1** (the sketch uses the `I2SClass` API), and the **`ESP32-RTSPServer`** library. Board: *ESP32 Dev Module*.
+3. **Fill in** the sketch: Wi-Fi SSID/password and the RTSP user/password. Power the board from a USB supply (≥ 1 A) and use **2.4 GHz** Wi-Fi.
+4. **Flash** over USB and open the serial monitor at **115200** — it prints `RTSP: rtsp://<node-ip>:554/`.
+5. **Quick test** from a machine on the same network (or over the tailnet from `opus`):
+   ```sh
+   ffprobe -rtsp_transport tcp rtsp://frigate:PASSWORD@<node-ip>:554/
+   ffplay  -rtsp_transport tcp rtsp://frigate:PASSWORD@<node-ip>:554/
+   ```
+   Expect one **mono `pcm_s16be` (L16)** audio stream at ~16 kHz; clap or whistle to hear it. A `401` means bad credentials; nothing means Wi-Fi/RTSP.
+6. **Level check** (10 s, no playback):
+   ```sh
+   ffmpeg -rtsp_transport tcp -i rtsp://frigate:PASSWORD@<node-ip>:554/ -t 10 -af volumedetect -f null - 2>&1 | grep -i volume
+   ```
+   `mean_volume` well above -90 dB means real audio; if it is silent or clipped, read the mic as **32-bit and shift** (see the bench note above) and re-test.
+7. Aim for Wi-Fi RSSI better than -75 dBm; lower TX power if the audio is noisy while the link is otherwise stable.
+8. **Pin the address** once it works — a DHCP reservation (shop: `shop-router/hosts.yml`; home: the router) so the URL never moves — then move on to Frigate (Phase 4).
+
 ## Pulling it into Frigate
 
 go2rtc on `opus` reads the node as an RTSP source and Frigate takes an audio-only input. The shop / `werkstatt` shape:
