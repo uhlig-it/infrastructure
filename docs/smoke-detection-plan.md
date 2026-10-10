@@ -9,7 +9,7 @@ Add an INMP441 I2S MEMS microphone so Frigate can raise `smoke_detector` / `fire
 ## Decisions
 
 - **Host: `pascal`** (the 24/7 print server). It already runs `go2rtc` (role in this repo), Frigate already consumes an RTSP stream from it (`printer`), and it is more reliable than `shop`. `go2rtc` supports a direct `alsa:` source, so no separate streaming unit is needed.
-- **Prototype first on `kiosk`** (home), with a second INMP441, then replicate on `pascal`. The home unit may stay as a smoke detector there. `kiosk` details are open (see Open questions).
+- **Prototype first on `ha-kiosk`** (home: the HA touch kiosk), with a second INMP441, then replicate on `pascal`. The home unit may stay as a smoke detector there. See Open questions.
 - **Boot config: a new local role, `i2s-mic`,** manages `/boot/firmware/config.txt`: set `dtparam=audio=off` (frees the I2S/PCM block that the onboard `bcm2835` audio uses) and add `dtoverlay=googlevoicehat-soundcard`; keep `dtparam=i2c_arm=on`. A reboot is required. The role directory also holds the wiring diagram.
 - **I2C and I2S coexist.** The BME280/TSL2561 use I2C1 (GPIO2/3); I2S uses GPIO18/19/20. Different pins and peripherals, so only the onboard audio is disabled, not I2C. (`pascal` has no I2C sensors anyway.)
 - **Audio path: mic → RTSP → Frigate.** On `pascal`, a `go2rtc` stream (e.g. `mic: alsa:hw:<card>,0`) publishes the mic; Frigate's own go2rtc pulls it, and the `werkstatt` camera gets an `ffmpeg` input with the `audio` role.
@@ -83,7 +83,7 @@ Wire `shop-alarm`/HA to act on Frigate `smoke_detector`/`fire_alarm` events. Dep
 
 ## Open questions
 
-- **`kiosk`:** what is it (Pi model, OS, tailnet membership, `ansible_user`)? Is it already fleet-managed in `inventory/hosts.yml`, or does it need adding? Does it feed `opus`'s Frigate (home) or its own? The prototype depends on these.
+- **`kiosk` = `ha-kiosk`:** the prototype host is the Home Assistant touch kiosk — a **Raspberry Pi 4** on Debian trixie, already fleet-managed in `inventory/hosts.yml` (groups `raspberry_pi`, `nodeexporters`) and reachable on the tailnet as `ha-kiosk`, managed as the `pi` user (`inventory/host_vars/ha-kiosk.yml`). The `i2s-mic` role enables the capture overlay here. Open: whether it feeds `opus`'s Frigate (home) or its own.
 - **`min_volume`:** unknown until we can sample the detectors; tune on the prototype.
 - **Reboot timing:** enabling I2S needs a reboot; on `pascal` do it between prints.
 - **`shop` disposition:** if `pascal` hosts the mic, `shop` keeps its I2C sensors unchanged; the unmanaged `shop` `config.txt` is still worth closing separately.

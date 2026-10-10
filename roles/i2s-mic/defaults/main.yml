@@ -1,0 +1,20 @@
+---
+# i2s-mic: enable an INMP441 I2S microphone on a Raspberry Pi by managing the
+# device-tree overlay and audio parameters in the boot config. See
+# docs/smoke-detection-plan.md.
+
+# Boot configuration file (Raspberry Pi OS Bookworm and newer).
+i2s_mic_config_txt: /boot/firmware/config.txt
+
+# Device-tree overlay that presents the I2S input as an ALSA capture card.
+# Fallbacks if this one misbehaves: audioinjector-bare-i2s, or dtparam=i2s=on
+# plus a matching I2S overlay.
+i2s_mic_overlay: googlevoicehat-soundcard
+
+# Keep the I2C bus enabled. I2C (GPIO2/3) and I2S (GPIO18/19/20) are separate
+# peripherals, so they coexist; this only guards against a stray dtparam.
+i2s_mic_keep_i2c: true
+
+# Reboot when the boot config changes (an overlay only loads at boot), then
+# confirm the capture card is present. Set false to converge without rebooting.
+i2s_mic_reboot: true

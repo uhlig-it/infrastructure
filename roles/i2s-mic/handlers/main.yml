@@ -1,0 +1,9 @@
+---
+- name: Reboot for the I2S overlay
+  # An overlay in config.txt only takes effect at boot, so reboot and wait for
+  # the host to come back before the play continues.
+  ansible.builtin.reboot:
+    msg: Rebooting to load the I2S microphone overlay
+    reboot_timeout: 600
+  become: true
+  when: i2s_mic_reboot

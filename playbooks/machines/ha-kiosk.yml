@@ -16,3 +16,5 @@
       tags: [suhlig, raspi, raspberry, pi]
     - role: touchkio
       tags: [touchkio, kiosk]
+    - role: i2s-mic
+      tags: [i2s-mic]

@@ -1,0 +1,72 @@
+---
+- name: The boot configuration file exists
+  ansible.builtin.stat:
+    path: "{{ i2s_mic_config_txt }}"
+  register: i2s_mic_config_txt_stat
+  tags: [ i2s-mic ]
+
+- name: The boot configuration file is present
+  ansible.builtin.assert:
+    that: i2s_mic_config_txt_stat.stat.exists
+    fail_msg: >-
+      {{ i2s_mic_config_txt }} not found — the i2s-mic role targets Raspberry Pi
+      OS (Bookworm and newer), where the boot config lives there.
+  tags: [ i2s-mic ]
+
+- name: ALSA utilities are installed
+  # arecord confirms the capture card here; go2rtc/ffmpeg need ALSA too.
+  ansible.builtin.apt:
+    name: alsa-utils
+    state: present
+  become: true
+  tags: [ i2s-mic ]
+
+- name: The onboard analog audio is disabled
+  # Frees the I2S/PCM block that the bcm2835 audio driver would otherwise claim.
+  ansible.builtin.lineinfile:
+    path: "{{ i2s_mic_config_txt }}"
+    regexp: '^dtparam=audio='
+    line: 'dtparam=audio=off'
+  become: true
+  notify: Reboot for the I2S overlay
+  tags: [ i2s-mic ]
+
+- name: The I2C bus is kept enabled
+  ansible.builtin.lineinfile:
+    path: "{{ i2s_mic_config_txt }}"
+    regexp: '^dtparam=i2c_arm='
+    line: 'dtparam=i2c_arm=on'
+  become: true
+  when: i2s_mic_keep_i2c
+  notify: Reboot for the I2S overlay
+  tags: [ i2s-mic ]
+
+- name: The I2S microphone overlay is enabled
+  ansible.builtin.lineinfile:
+    path: "{{ i2s_mic_config_txt }}"
+    regexp: '^dtoverlay={{ i2s_mic_overlay | regex_escape }}'
+    line: 'dtoverlay={{ i2s_mic_overlay }}'
+    # Placed in the [all] section so it applies to every model.
+    insertafter: '^\[all\]'
+  become: true
+  notify: Reboot for the I2S overlay
+  tags: [ i2s-mic ]
+
+- name: Reboot now if the boot config changed
+  ansible.builtin.meta: flush_handlers
+  tags: [ i2s-mic ]
+
+- name: The I2S capture card is present
+  ansible.builtin.command:
+    cmd: arecord -l
+  register: i2s_mic_arecord
+  changed_when: false
+  failed_when: "'card' not in (i2s_mic_arecord.stdout | lower)"
+  when: i2s_mic_reboot and not ansible_check_mode
+  tags: [ i2s-mic, verify ]
+
+- name: Show the detected capture card
+  ansible.builtin.debug:
+    var: i2s_mic_arecord.stdout_lines
+  when: i2s_mic_reboot and not ansible_check_mode
+  tags: [ i2s-mic, verify ]

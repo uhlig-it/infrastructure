@@ -1,0 +1,13 @@
+---
+galaxy_info:
+  role_name: i2s-mic
+  author: Steffen Uhlig <steffen@familie-uhlig.net>
+  description: >-
+    Enable an INMP441 I2S microphone on a Raspberry Pi by managing the boot
+    overlay and audio parameters in /boot/firmware/config.txt
+  license: MIT
+  min_ansible_version: "2.9"
+  platforms:
+    - name: Debian
+      versions: [ 11, 12, 13 ]
+dependencies: []
