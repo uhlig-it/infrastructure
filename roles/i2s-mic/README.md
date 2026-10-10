@@ -4,6 +4,10 @@ Documentation for the **INMP441 I2S MEMS microphone** used by the smoke-detectio
 
 > **Status:** the deployment path moved to standalone **ESP32 nodes**, so the Raspberry Pi boot-config role (managing `dtoverlay=googlevoicehat-soundcard` + `dtparam=audio=off` in `/boot/firmware/config.txt`) has been removed and `ha-kiosk` reverted. What remains here is the wiring diagram; role content for the ESP32 sensor node will be added later.
 
+## Sensor-node firmware
+
+The ESP32 sensor node's streamer is documented in [`firmware.md`](firmware.md): an audio-only RTSP sketch on [`rjsachse/ESP32-RTSPServer`](https://github.com/rjsachse/ESP32-RTSPServer), with the wiring and a sample config.
+
 ## Wiring diagram
 
 The source is [`inmp441-esp32.yaml`](inmp441-esp32.yaml) — wiregen's declarative YAML. [`inmp441-esp32.svg`](inmp441-esp32.svg) is rendered from it and committed here so it shows inline on GitHub:

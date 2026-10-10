@@ -16,7 +16,7 @@ An ESP32 (a few euros, Wi-Fi built in) captures the mic locally over that short 
 
 - **Sensor node: ESP32-DevKitC V4** (Espressif, ESP32-WROOM-32). One per site, powered from a USB supply and joined to the local WLAN.
 - **Mic: INMP441**, on the ESP32's I2S0 peripheral, wired with a short harness (see the wiring table).
-- **Transport: a dedicated RTSP/HTTP streamer firmware** on the ESP32 — *not* ESPHome (ESPHome reads the mic but has no audio *server*), chosen so Frigate's bundled go2rtc can pull it like any camera. The firmware is not yet selected (see Open questions).
+- **Transport: a dedicated RTSP/HTTP streamer firmware** on the ESP32 — *not* ESPHome (ESPHome reads the mic but has no audio *server*), chosen so Frigate's bundled go2rtc can pull it like any camera. Selected: an audio-only RTSP sketch on **`rjsachse/ESP32-RTSPServer`** (a generic-ESP32 library with RTSP Basic auth); see [`../roles/i2s-mic/firmware.md`](../roles/i2s-mic/firmware.md).
 - **Auth: HTTP Basic** on the stream. Sufficient because the stream is only pulled by `opus` over the tailnet (and, in the shop, only across the shop-router WLAN), so the WLAN/tailnet is the trust boundary rather than the credential. Use an isolated/IoT SSID where practical, and upgrade to Digest if the chosen firmware supports it.
 - **Stable addressing: a DHCP reservation** — in the shop via `github.com/uhlig-it/shop-router` (`hosts.yml`, installed by `configure.sh`); at home via the router's reservation or a static IP — so the Frigate URL never moves.
 - **Reachability (shop): over the tailnet, via `shop`'s subnet router.** The workshop WLAN *is* the `shop-router` LAN, `192.168.1.0/24`; `shop` advertises that route and `opus` runs `--accept-routes`, so `opus` reaches a `192.168.1.x` ESP32 directly and Frigate pulls its stream with no relay on `shop`/`pascal`.
@@ -81,7 +81,7 @@ go2rtc on `ha-kiosk` published the mic as `rtsp://ha-kiosk:8554/mic` using an ff
 
 ### Phase 3 — ESP32 sensor node (current)
 
-- Select and flash the streamer firmware (see Open questions), supporting HTTP Basic auth and an RTSP (or HTTP-AAC) output URL.
+- Flash the selected streamer: an audio-only RTSP sketch on `rjsachse/ESP32-RTSPServer` (see [`../roles/i2s-mic/firmware.md`](../roles/i2s-mic/firmware.md)). It serves `rtsp://<node>:554/` — `L16` mono PCM — with RTSP Basic auth.
 - Wire the INMP441 per the diagram; power the board; join the WLAN.
 - Give the node a stable address: a reservation in `shop-router/hosts.yml` for the shop; a reservation or static address at home.
 - Prove `opus` can pull it over the tailnet (`ffprobe`/`ffplay` the URL) before touching Frigate.
@@ -101,7 +101,6 @@ Wire `shop-alarm`/HA to act on Frigate `smoke_detector`/`fire_alarm` events. Dep
 
 ## Open questions
 
-- **Streamer firmware:** which OSS RTSP/HTTP audio streamer, whether it offers Digest auth, a stable RTSP URL, and buffering that survives Wi-Fi jitter. To select and prove on the bench.
 - **Audio-only in Frigate:** Frigate normally ties audio to a camera that also has video, but the living room has no camera. Decide how to expose the node to `opus` — a synthetic/placeholder detect input, or an audio-only camera if Frigate 0.15 accepts one.
 - **`min_volume`:** unknown until we can sample the detectors; tune on the node.
 
