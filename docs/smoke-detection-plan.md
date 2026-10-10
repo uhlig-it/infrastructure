@@ -52,7 +52,7 @@ The wiring diagram is rendered by [wiregen](https://github.com/WeebLabs/wiregen)
 ## Facts already gathered
 
 - `ha-kiosk` (first sensor) is a **Pi 4** on Debian trixie, managed as the `pi` user. The `i2s-mic` role has been applied: `dtoverlay=googlevoicehat-soundcard` + `dtparam=audio=off` in `/boot/firmware/config.txt`, and `arecord -l` now shows `card 0: snd_rpi_googlevoicehat_soundcard`. The card exposes **no ALSA mixer controls**, so any gain must be digital.
-- `ha-kiosk` publishes the mic as `rtsp://ha-kiosk:8554/mic` (AAC 48 kHz stereo) through `go2rtc`: the native `alsa:` source only emits raw S16LE (`format S16LE not supported` over RTSP) and go2rtc's `ffmpeg:` source would not produce, so the stream uses an ffmpeg `exec:` source (`exec:ffmpeg -f alsa -i plughw:0,0 -c:a aac -vn -f mpegts -`). The go2rtc API (`:1984`) is bound to all interfaces and `exec:` makes that API powerful — restricting it is a follow-up.
+- `ha-kiosk` publishes the mic as `rtsp://ha-kiosk:8554/mic` (**AAC 48 kHz mono**) through `go2rtc`: the native `alsa:` source only emits raw S16LE (`format S16LE not supported` over RTSP) and go2rtc's `ffmpeg:` source would not produce, so the stream uses an ffmpeg `exec:` source that takes the left channel as mono (`exec:ffmpeg -f alsa -i plughw:0,0 -af pan=mono|c0=c0 -c:a aac -vn -f mpegts -`). go2rtc's listeners are bound to the Tailscale address (`go2rtc_listen`), so the streams and the exec-capable API are reachable over the tailnet only.
 - `pascal` (second sensor) is a **Pi 3 on Raspbian bullseye** (kernel 6.1); its boot config is `/boot/config.txt` (not `/boot/firmware/`), and `googlevoicehat-soundcard.dtbo` is present. No capture card yet.
 - `shop` is a Pi 3 Model B Rev 1.2, Raspbian 12 Bookworm, kernel 6.12 (`+rpt-rpi-v7`). `pascal` is a Pi 3 as well.
 - `shop` `/boot/firmware/config.txt`: `dtparam=i2c_arm=on`, `dtparam=audio=on`, `#dtparam=i2s=on` (commented), `dtoverlay=vc4-kms-v3d`, `camera_auto_detect=1`. Nothing manages `config.txt` in Ansible today.
@@ -76,7 +76,7 @@ The `i2s-mic` role manages the boot config (`/boot/firmware/config.txt` on Bookw
 
 ### Phase 2 — the audio stream
 
-On `ha-kiosk`, `go2rtc` is installed (role added to `playbooks/machines/ha-kiosk.yml`) and publishes the mic as `rtsp://ha-kiosk:8554/mic`. The native `alsa:` source only emits raw S16LE (go2rtc rejects it over RTSP: `format S16LE not supported`) and go2rtc's `ffmpeg:` source would not produce, so the stream reads ALSA through an explicit ffmpeg `exec:` source emitting AAC in MPEG-TS (`exec:ffmpeg -f alsa -i plughw:0,0 -c:a aac -vn -f mpegts -`). Verified: the RTSP stream is AAC 48 kHz stereo. Replicate on `pascal` for shop audio afterwards (same approach).
+On `ha-kiosk`, `go2rtc` is installed (role added to `playbooks/machines/ha-kiosk.yml`) and publishes the mic as `rtsp://ha-kiosk:8554/mic`. The native `alsa:` source only emits raw S16LE (go2rtc rejects it over RTSP: `format S16LE not supported`) and go2rtc's `ffmpeg:` source would not produce, so the stream reads ALSA through an explicit ffmpeg `exec:` source emitting AAC in MPEG-TS (`exec:ffmpeg -f alsa -i plughw:0,0 -c:a aac -vn -f mpegts -`). Verified: the RTSP stream is AAC 48 kHz mono (left channel), and the go2rtc listeners are bound to the Tailscale address (`go2rtc_listen`) so streams and the API are tailnet-only. Replicate on `pascal` for shop audio afterwards (same approach).
 
 ### Phase 3 — Frigate audio detection
 

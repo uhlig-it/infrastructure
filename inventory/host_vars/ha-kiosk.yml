@@ -7,7 +7,13 @@ ansible_user: pi
 # Publish the INMP441 I2S microphone (roles/i2s-mic) as RTSP for Frigate. This is
 # the living-room smoke/audio sensor; there is no camera here, so it is
 # audio-only. The native alsa: source can only emit raw S16LE (which go2rtc
-# cannot serve over RTSP), and go2rtc's ffmpeg: source failed to produce, so read
-# ALSA with an explicit ffmpeg exec source that emits AAC in MPEG-TS.
+# cannot serve over RTSP) and go2rtc's ffmpeg: source failed to produce, so read
+# ALSA with an explicit ffmpeg exec source: take the left channel (L/R = GND) as
+# mono (the card presents the mic as stereo with a silent right channel) and
+# encode AAC in MPEG-TS.
 go2rtc_streams:
-  mic: "exec:ffmpeg -hide_banner -f alsa -i plughw:0,0 -c:a aac -vn -f mpegts -"
+  mic: "exec:ffmpeg -hide_banner -f alsa -i plughw:0,0 -af pan=mono|c0=c0 -c:a aac -vn -f mpegts -"
+
+# Restrict go2rtc to the tailnet: bind its listeners to the Tailscale address so
+# neither the streams nor the (exec-capable) API are exposed on the LAN.
+go2rtc_listen: "{{ ansible_facts['tailscale0']['ipv4']['address'] }}"

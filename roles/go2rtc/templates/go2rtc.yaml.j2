@@ -5,8 +5,18 @@ log:
 ffmpeg:
   bin: {{ go2rtc_ffmpeg_bin }}
 {% endif %}
+{% if go2rtc_listen %}
+# Bind every listener to a single address (e.g. the Tailscale IPv4) so the
+# streams and the API are reachable only there, not on the LAN.
+api:
+  listen: "{{ go2rtc_listen }}:1984"
+rtsp:
+  listen: "{{ go2rtc_listen }}:8554"
+webrtc:
+  listen: "{{ go2rtc_listen }}:8555"
+{% endif %}
 
 streams:
 {% for name, source in go2rtc_streams.items() %}
-  {{ name }}: {{ source }}
+  {{ name }}: "{{ source }}"
 {% endfor %}
