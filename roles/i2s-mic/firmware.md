@@ -19,6 +19,10 @@ Two practical notes from the source:
 - Advertise on the **default RTSP port 554**: the server's `Content-Base` is hardcoded to `:554`, so a different port makes clients build the wrong `SETUP` URL. 554 is fine on the ESP32.
 - The track is raw **PCM `L16`** (big-endian), so expect ~32 kB/s at 16 kHz mono — negligible over the tailnet.
 
+### Upstream status
+
+Worth knowing before we lean on it: the library is MIT with a healthy following (88★, 14 forks), but it is effectively **dormant** — the last commit was **2025-08-27**, the last release **1.3.5 (2025-06-26)**, and the PlatformIO Registry carries only that version. Two issues from **February 2026** are unanswered, one of them **“Issue with authentication” (#32)** — the exact feature we use. Mitigations: pin `1.3.5`, keep a vendorable copy (the source is small), and treat the bench auth test below as load-bearing; if the 401 bites we patch our copy or fall back to a maintained alternative.
+
 ### Alternatives considered
 
 - **[`Sukecz/esp32-birdnet-mic`](https://github.com/Sukecz/esp32-birdnet-mic)** — the most turnkey option: purpose-built RTSP I2S mic firmware with a Web UI, MQTT / Home Assistant discovery, auto-recovery, thermal protection and a stream schedule. But it builds only for **Seeed XIAO ESP32-C3/S3/C5/C6** (no WROOM-32 target) and has **no stream or Web authentication**. Use it only if we switch the node to a XIAO C6, or accept an unauthenticated stream.
@@ -94,6 +98,22 @@ Bench notes:
 
 - The INMP441 delivers 24-bit samples in a 32-bit frame; if the 16-bit path above is quiet or clipped, read `I2S_DATA_BIT_WIDTH_32BIT` and shift right to match the level (the mic's data is MSB-aligned). Tune gain here.
 - Verify before touching Frigate: `ffprobe -rtsp_transport tcp rtsp://<user>:<pass>@<node-ip>:554/` (and `ffplay`) should report an `L16` mono audio stream.
+
+## PlatformIO
+
+PlatformIO works; the one catch is the Arduino core. The sketch uses the `I2SClass` API (`<ESP_I2S.h>`), which needs **Arduino core ≥ 3.1.1**, but PlatformIO's official `espressif32` platform still pins Arduino core **2.0.17** (`v7.1.3`). Use the community **pioarduino** platform, which tracks Arduino core 3.x (currently 3.3.12):
+
+```ini
+; platformio.ini
+[env:esp32dev]
+platform = https://github.com/pioarduino/platform-espressif32/releases/download/55.03.312-1/platform-espressif32.zip
+board = esp32dev
+framework = arduino
+monitor_speed = 115200
+lib_deps = ESP32-RTSPServer@1.3.5
+```
+
+`ESP32-RTSPServer` is on the PlatformIO Registry (community, MIT), so `lib_deps` resolves it — pin the version. Then `pio run -t upload && pio device monitor` builds, flashes and opens the serial monitor.
 
 ## Bench checklist
 
