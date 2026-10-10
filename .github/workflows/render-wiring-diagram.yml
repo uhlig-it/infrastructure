@@ -1,6 +1,6 @@
 name: Render wiring diagram
 
-# Regenerate roles/i2s-mic/inmp441-pi3.svg from its wiregen source whenever the
+# Regenerate roles/i2s-mic/inmp441-esp32.svg from its wiregen source whenever the
 # YAML changes, and commit the result back so the picture never drifts from the
 # source. On pull requests it only verifies (fork PRs get a read-only token, so
 # they cannot commit); on push it commits.
@@ -29,17 +29,18 @@ jobs:
       - name: Install wiregen
         run: |
           python3 -m venv /tmp/wiregen
-          # The suhlig fork, until the INMP441 and Raspberry Pi 3 parts land
-          # upstream. Swap to github.com/WeebLabs/wiregen (or PyPI) once merged.
+          # The suhlig fork, until the INMP441, Raspberry Pi 3 and
+          # ESP32-DevKitC V4 parts land upstream. Swap to
+          # github.com/WeebLabs/wiregen (or PyPI) once merged.
           /tmp/wiregen/bin/pip install \
             "wiregen @ git+https://github.com/suhlig/wiregen@add-smoke-detection-via-INMP441"
       - name: Render the diagram
-        run: /tmp/wiregen/bin/wiregen render roles/i2s-mic/inmp441-pi3.yaml
+        run: /tmp/wiregen/bin/wiregen render roles/i2s-mic/inmp441-esp32.yaml
       - name: Verify the SVG is up to date
         if: github.event_name == 'pull_request'
         run: |
-          if ! git diff --exit-code -- roles/i2s-mic/inmp441-pi3.svg; then
-            echo "::error::roles/i2s-mic/inmp441-pi3.svg is stale — run 'wiregen render roles/i2s-mic/inmp441-pi3.yaml' and commit the result."
+          if ! git diff --exit-code -- roles/i2s-mic/inmp441-esp32.svg; then
+            echo "::error::roles/i2s-mic/inmp441-esp32.svg is stale — run 'wiregen render roles/i2s-mic/inmp441-esp32.yaml' and commit the result."
             exit 1
           fi
       - name: Commit the regenerated SVG
@@ -47,7 +48,7 @@ jobs:
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add roles/i2s-mic/inmp441-pi3.svg
+          git add roles/i2s-mic/inmp441-esp32.svg
           if git diff --cached --quiet; then
             echo "SVG unchanged; nothing to commit."
             exit 0

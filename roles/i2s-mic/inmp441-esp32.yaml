@@ -1,0 +1,45 @@
+title: INMP441 I2S microphone → ESP32-DevKitC V4
+subtitle: I2S MEMS mic on the ESP32's I2S0 peripheral (BCLK IO26 / LRCLK IO25 / DIN IO33)
+grid: true
+
+parts:
+  mic:
+    part: inmp441
+    region: left
+    label: INMP441
+  esp:
+    part: esp32-devkitc-v4
+    region: right
+    label: ESP32-DevKitC V4
+
+connections:
+  # the three I2S lines, expanded and coloured per role (BCLK / LRCLK / Data)
+  - bus: i2s
+    from: esp
+    to: mic
+    map:
+      IO26: SCK
+      IO25: WS
+      IO33: SD
+  # power and channel select
+  - { from: esp.3V3, to: mic.VDD, route: bottom }
+  - { from: esp.GND, to: mic.GND }
+  - { from: esp.GND, to: mic.L/R }
+
+annotations:
+  - card: ESP32 ↔ INMP441
+    rows:
+      VDD: 3V3 — never 5V
+      GND: GND
+      "L/R": GND — selects the left channel
+      SCK: IO26 / BCLK (bit clock, output)
+      WS: IO25 / LRCLK (word select, output)
+      SD: IO33 / DIN (mic data into the ESP32)
+  - card: Notes
+    text: >-
+      VDD is 3V3 only — never feed 5V. Tying L/R to GND selects the left
+      channel; leave it high to select the right channel. Keep the I2S run
+      short (a few cm).
+
+      The ESP32 captures the mic and publishes it on the network as an audio
+      source for Frigate; see docs/smoke-detection-plan.md.
