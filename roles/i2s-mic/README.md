@@ -4,10 +4,13 @@ Ansible role for the **INMP441 I2S MEMS microphone** on a Raspberry Pi 3, part o
 
 ## Wiring diagram
 
-- `inmp441-pi3.yaml` — the diagram source (wiregen's declarative YAML).
-- `inmp441-pi3.svg` / `inmp441-pi3.png` — the rendered diagram (vector, plus a raster preview).
+The source is [`inmp441-pi3.yaml`](inmp441-pi3.yaml) — wiregen's declarative YAML. [`inmp441-pi3.svg`](inmp441-pi3.svg) is rendered from it and committed here so it shows inline on GitHub:
 
-Render it with [wiregen](https://github.com/WeebLabs/wiregen):
+![INMP441 I2S microphone wired to a Raspberry Pi 3](inmp441-pi3.svg)
+
+[`render-wiring-diagram.yml`](../../.github/workflows/render-wiring-diagram.yml) re-renders the SVG whenever the YAML changes and commits it, so the picture never drifts from the source.
+
+To render locally, install [wiregen](https://github.com/WeebLabs/wiregen) and run:
 
 ```sh
 pipx install --editable /path/to/suhlig-wiregen   # install the fork, editable
