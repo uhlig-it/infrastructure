@@ -3,3 +3,11 @@
 # login live there, so it is managed as `pi` rather than the fleet-standard
 # `suhlig` (see inventory/group_vars/raspberry_pi.yml).
 ansible_user: pi
+
+# Publish the INMP441 I2S microphone (roles/i2s-mic) as RTSP for Frigate. This is
+# the living-room smoke/audio sensor; there is no camera here, so it is
+# audio-only. The native alsa: source can only emit raw S16LE (which go2rtc
+# cannot serve over RTSP), and go2rtc's ffmpeg: source failed to produce, so read
+# ALSA with an explicit ffmpeg exec source that emits AAC in MPEG-TS.
+go2rtc_streams:
+  mic: "exec:ffmpeg -hide_banner -f alsa -i plughw:0,0 -c:a aac -vn -f mpegts -"
