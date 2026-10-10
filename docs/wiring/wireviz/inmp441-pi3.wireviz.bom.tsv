@@ -1,8 +1,0 @@
-Id	Description	Qty	Unit	Designators
-1	Connector, INMP441, I2S MEMS microphone breakout, 6 pins	1		Mic
-2	Connector, Raspberry Pi 3 Model B, J8 40-pin GPIO header (only the 6 used pins shown), 6 pins	1		Pi3
-3	Wire, 0.25 mm², BK	0.3	m	Jumpers
-4	Wire, 0.25 mm², BU	0.15	m	Jumpers
-5	Wire, 0.25 mm², GN	0.15	m	Jumpers
-6	Wire, 0.25 mm², RD	0.15	m	Jumpers
-7	Wire, 0.25 mm², YE	0.15	m	Jumpers

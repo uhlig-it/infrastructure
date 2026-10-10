@@ -10,7 +10,7 @@ Add an INMP441 I2S MEMS microphone so Frigate can raise `smoke_detector` / `fire
 
 - **Host: `pascal`** (the 24/7 print server). It already runs `go2rtc` (role in this repo), Frigate already consumes an RTSP stream from it (`printer`), and it is more reliable than `shop`. `go2rtc` supports a direct `alsa:` source, so no separate streaming unit is needed.
 - **Prototype first on `kiosk`** (home), with a second INMP441, then replicate on `pascal`. The home unit may stay as a smoke detector there. `kiosk` details are open (see Open questions).
-- **Boot config: a new local role here** manages `/boot/firmware/config.txt`: set `dtparam=audio=off` (frees the I2S/PCM block that the onboard `bcm2835` audio uses) and add `dtoverlay=googlevoicehat-soundcard`; keep `dtparam=i2c_arm=on`. A reboot is required.
+- **Boot config: a new local role, `i2s-mic`,** manages `/boot/firmware/config.txt`: set `dtparam=audio=off` (frees the I2S/PCM block that the onboard `bcm2835` audio uses) and add `dtoverlay=googlevoicehat-soundcard`; keep `dtparam=i2c_arm=on`. A reboot is required. The role directory also holds the wiring diagram.
 - **I2C and I2S coexist.** The BME280/TSL2561 use I2C1 (GPIO2/3); I2S uses GPIO18/19/20. Different pins and peripherals, so only the onboard audio is disabled, not I2C. (`pascal` has no I2C sensors anyway.)
 - **Audio path: mic → RTSP → Frigate.** On `pascal`, a `go2rtc` stream (e.g. `mic: alsa:hw:<card>,0`) publishes the mic; Frigate's own go2rtc pulls it, and the `werkstatt` camera gets an `ffmpeg` input with the `audio` role.
 - **Frigate camera vars: refactor** them out of the vaulted `inventory/host_vars/opus/secrets.yml` into plaintext `inventory/host_vars/opus/main.yml`, bridging only the MQTT password from the vault. Camera URLs are not secret; this avoids editing the vault on every camera change.
@@ -43,7 +43,7 @@ flowchart LR
 | WS (LRCLK) | 35 | GPIO19 |
 | SD (DIN) | 38 | GPIO20 |
 
-The wiring diagram is rendered by [wiregen](https://github.com/WeebLabs/wiregen) from [`docs/wiring/wiregen/inmp441-pi3.yaml`](wiring/wiregen/inmp441-pi3.yaml), using the `suhlig/wiregen` fork until its new INMP441 and Raspberry Pi 3 parts are merged upstream. See [`docs/wiring/`](wiring/README.md).
+The wiring diagram is rendered by [wiregen](https://github.com/WeebLabs/wiregen) from [`roles/i2s-mic/inmp441-pi3.yaml`](../roles/i2s-mic/inmp441-pi3.yaml), using the `suhlig/wiregen` fork until its new INMP441 and Raspberry Pi 3 parts are merged upstream. It lives with the role it documents; see [`roles/i2s-mic/README.md`](../roles/i2s-mic/README.md) and Phase 0.
 
 ## Facts already gathered
 
@@ -57,13 +57,15 @@ The wiring diagram is rendered by [wiregen](https://github.com/WeebLabs/wiregen)
 
 ## Work plan
 
-### Phase 0 — prototype (no repo changes)
+### Phase 0 — role scaffold + prototype
+
+Create the `i2s-mic` role directory and put the wiring diagram in it (the wiregen source `inmp441-pi3.yaml` plus its rendered `inmp441-pi3.svg` / `.png`). The diagram belongs with the role it documents, and the role directory is needed from the outset to hold it.
 
 On the chosen prototype host, add the two `config.txt` lines, reboot, confirm `arecord -l` shows a capture card, and record a sample. Settle the overlay (`googlevoicehat-soundcard` vs `dtparam=i2s=on` + `audioinjector-bare-i2s`) and the ALSA device id.
 
-### Phase 1 — boot-config role (local)
+### Phase 1 — the role's tasks
 
-A new local role managing `/boot/firmware/config.txt` (`dtparam=audio=off`, `dtoverlay=googlevoicehat-soundcard`, keep `i2c_arm=on`) with a reboot handler. This also closes the general gap that `config.txt` is currently unmanaged (even `i2c_arm` is only there by hand).
+Fill in the `i2s-mic` role (directory created in Phase 0) with the tasks that manage `/boot/firmware/config.txt` (`dtparam=audio=off`, `dtoverlay=googlevoicehat-soundcard`, keep `i2c_arm=on`) and a reboot handler. This also closes the general gap that `config.txt` is currently unmanaged (even `i2c_arm` is only there by hand).
 
 ### Phase 2 — the audio stream
 
