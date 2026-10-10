@@ -1,0 +1,27 @@
+---
+# TouchKio: a Home Assistant kiosk (Electron) that leukipp ships as a .deb per
+# release. The role installs the newest stable release and upgrades it in place
+# when a newer one appears, mirroring the project's install.sh.
+# https://github.com/leukipp/touchkio
+
+# Version to install. "latest" follows the newest stable GitHub release; pin a
+# version (e.g. "1.6.0") to hold the kiosk on one release.
+touchkio_version: latest
+
+# touchkio names the architecture in its release assets as arm64/x64, unlike
+# the kernel's aarch64/x86_64.
+touchkio_arch_map:
+  aarch64: arm64
+  x86_64: x64
+touchkio_arch: "{{ touchkio_arch_map[ansible_facts['architecture']] }}"
+
+# Login user that runs the graphical kiosk session and owns the systemd user
+# service. This is the connecting user (pi on ha-kiosk), not a system account.
+touchkio_user: "{{ ansible_user_id }}"
+touchkio_home: "{{ ansible_facts['user_dir'] }}"
+touchkio_user_uid: "{{ ansible_user_uid }}"
+
+# Where the downloaded .deb is staged before apt installs it.
+touchkio_deb_dir: /var/tmp/touchkio
+
+touchkio_service_name: touchkio.service

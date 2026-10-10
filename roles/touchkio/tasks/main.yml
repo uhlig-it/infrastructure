@@ -1,0 +1,95 @@
+---
+- name: Installed touchkio version is known
+  ansible.builtin.command:
+    argv:
+      - dpkg-query
+      - -W
+      - -f=${Version}
+      - touchkio
+  register: touchkio_installed
+  changed_when: false
+  failed_when: false
+  check_mode: false
+  tags: [ touchkio, package ]
+
+- name: Latest touchkio release is looked up
+  ansible.builtin.uri:
+    url: https://api.github.com/repos/leukipp/touchkio/releases/latest
+    headers:
+      Accept: application/vnd.github+json
+    return_content: true
+  register: touchkio_release
+  changed_when: false
+  # Read-only, so it runs during --check too (uri is otherwise skipped there).
+  check_mode: false
+  when: touchkio_version | lower == 'latest'
+  tags: [ touchkio, package ]
+
+- name: Target touchkio version is set
+  ansible.builtin.set_fact:
+    touchkio_installed_version: "{{ touchkio_installed.stdout | trim }}"
+    touchkio_target_version: >-
+      {{ (touchkio_release.json.tag_name | regex_replace('^v', ''))
+         if touchkio_version | lower == 'latest'
+         else (touchkio_version | regex_replace('^v', '')) }}
+  tags: [ touchkio, package ]
+
+- name: touchkio needs installing or updating
+  ansible.builtin.set_fact:
+    touchkio_needs_update: "{{ touchkio_installed_version != touchkio_target_version }}"
+  tags: [ touchkio, package ]
+
+- name: touchkio {{ touchkio_target_version }} is installed
+  when: touchkio_needs_update | bool
+  block:
+    - name: Staging directory exists
+      ansible.builtin.file:
+        path: "{{ touchkio_deb_dir }}"
+        state: directory
+        mode: "0755"
+      become: true
+      tags: [ touchkio, package ]
+
+    - name: touchkio {{ touchkio_target_version }} .deb is downloaded
+      ansible.builtin.get_url:
+        url: "https://github.com/leukipp/touchkio/releases/download/v{{ touchkio_target_version }}/touchkio_{{ touchkio_target_version }}_{{ touchkio_arch }}.deb"
+        dest: "{{ touchkio_deb_dir }}/touchkio_{{ touchkio_target_version }}_{{ touchkio_arch }}.deb"
+        mode: "0644"
+      become: true
+      register: touchkio_deb
+      tags: [ touchkio, package ]
+
+    # Skipped in check mode: the .deb is not downloaded there, so apt has no
+    # file to install. A converged host skips this whole block anyway.
+    - name: touchkio {{ touchkio_target_version }} is installed
+      ansible.builtin.apt:
+        deb: "{{ touchkio_deb.dest }}"
+      become: true
+      notify: Restart touchkio
+      when: not ansible_check_mode
+      tags: [ touchkio, package ]
+
+# install.sh writes this unit; the .deb does not ship it. Keeping it managed
+# means the kiosk starts on boot even on a fresh host.
+- name: touchkio user service is present
+  ansible.builtin.template:
+    src: touchkio.service.j2
+    dest: "{{ touchkio_home }}/.config/systemd/user/{{ touchkio_service_name }}"
+    owner: "{{ touchkio_user }}"
+    group: "{{ touchkio_user }}"
+    mode: "0644"
+  notify: Restart touchkio
+  tags: [ touchkio, systemd, service, config ]
+
+# User scope: XDG_RUNTIME_DIR points at the kiosk user's systemd manager.
+# See https://docs.ansible.com/ansible/latest/collections/ansible/builtin/systemd_module.html
+- name: touchkio user service is enabled and started
+  ansible.builtin.systemd:
+    name: "{{ touchkio_service_name }}"
+    scope: user
+    enabled: true
+    state: started
+    daemon_reload: true
+  environment:
+    XDG_RUNTIME_DIR: "/run/user/{{ touchkio_user_uid }}"
+  tags: [ touchkio, systemd, service ]

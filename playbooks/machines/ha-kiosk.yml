@@ -1,0 +1,18 @@
+---
+# Source: github.com/leukipp/touchkio
+# Tailscale is configured by playbooks/fleet/tailscale.yml.
+# The kiosk runs as the `pi` user (see inventory/host_vars/ha-kiosk.yml).
+- name: ha-kiosk Home Assistant touch kiosk
+  hosts: ha-kiosk
+  vars:
+    hostname: ha-kiosk
+  roles:
+    - role: suhlig.foundation.main
+      vars: { github_user: suhlig }
+      become: true
+      tags: [suhlig]
+    - role: suhlig.foundation.raspberry_pi
+      become: true
+      tags: [suhlig, raspi, raspberry, pi]
+    - role: touchkio
+      tags: [touchkio, kiosk]

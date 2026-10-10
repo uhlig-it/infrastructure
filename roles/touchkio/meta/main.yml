@@ -1,0 +1,13 @@
+---
+galaxy_info:
+  role_name: touchkio
+  author: Steffen Uhlig <steffen@familie-uhlig.net>
+  description: >-
+    Home Assistant touch kiosk (TouchKio): install and auto-update the GitHub
+    .deb release and manage the systemd user service
+  license: MIT
+  min_ansible_version: "2.9"
+  platforms:
+    - name: Debian
+      versions: [ 11, 12, 13 ]
+dependencies: []

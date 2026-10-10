@@ -110,6 +110,7 @@ This is the table the consolidated inventory should encode. It merges every inve
 | `kunakam` | `kunakam` (offline, kept for revival) | Camera | mediamtx camera |
 | `wordclock` | `wordclock` | Raspberry Pi | wordclock app, env-sensors, home-automation (alexa) |
 | `pascal` | `pascal` | 3D printer server | OctoPrint (Tailscale Service `svc:octoprint`), go2rtc printer camera, shop-health |
+| `ha-kiosk` | `ha-kiosk` | Raspberry Pi 4 | Home Assistant touch kiosk (TouchKio), node exporter |
 | `hansahaus` | `hansahaus` | Fortress | baseline hardening |
 | `fortcarsta` | `fortcarsta` | Fortress | baseline hardening |
 
@@ -126,6 +127,7 @@ Full list from `tailscale status` on this machine, mapped to the plan.
 | `pi5` | suhlig@ | linux | — | `pi5` machine |
 | `wordclock` | suhlig@ | linux | — | `wordclock` machine |
 | `pascal` | suhlig@ | linux | offline 17h | `pascal` machine |
+| `ha-kiosk` | suhlig@ | linux | — | `ha-kiosk` machine (TouchKio kiosk) |
 | `hansahaus` | suhlig@ | linux | — | `hansahaus` machine (fortress) |
 | `fortcarsta` | suhlig@ | linux | — | `fortcarsta` machine (fortress) |
 | `kunakam` | suhlig@ | linux | offline (kept for revival) | `kunakam` machine (camera) |
@@ -307,6 +309,7 @@ The scaffold lives at `github.com/uhlig-it/infrastructure/` in this workspace.
 - **OctoPrint large gcode uploads unblocked (2026-10-09):** the haproxy→nginx switch (`8beb3eb`) left nginx on its built-in 1 MB `client_max_body_size`, so the web UI's `POST /api/files/local` got `413 Request Entity Too Large` for any gcode over 1 MB (nginx rejected it before `proxy_pass`, so OctoPrint logged nothing and it looked like a server-side upload failure). `roles/octoprint` now emits `client_max_body_size {{ octoprint_client_max_body_size }}` with the default `0` (no limit, matching the retired haproxy); deployed to `pascal` on 2026-10-09. That directive is the knob if uploads are ever capped again.
 - **CI deploy key authorized fleet-wide (2026-10-09):** `playbooks/fleet/deploy_key.yml` (role `deploy_key`) installs the vault's `github.ssh_key` public half (`ci_deploy_public_key`, comment `CI`) into each host's `ansible_user` `authorized_keys` — `root` on the servers, `suhlig` elsewhere — and rewrites `shop`'s stale `concourse` comment. The key had been only on `shop`, so `opus`/`pi5`/`wordclock`/`soda`/`neon` CI deploys failed with `Permission denied (publickey)`; applied to those six, and a full `site.yml` run covers the rest.
 - **mqtt-router app repo tidied (2026-10-10):** the app repo's own consolidation leftovers are gone — the stale `deployment/playbook.yml` instruction in `README.markdown` now points at `playbooks/services/mqtt-router.yml`, the now-done `Extract deployment and pipeline…` TODO is struck, and the temporary `.github/workflows/deploy-test.yml` (a manual trigger to exercise the deploy path before releases) is deleted now that a release drives the deploy.
+- **Home Assistant touch kiosk adopted (2026-10-10):** `ha-kiosk` (Pi 4, Debian trixie) was a one-off and is now a managed Raspberry Pi running the `pi` user (`host_vars/ha-kiosk.yml` overrides the group's `suhlig`), with `suhlig.foundation.main` + `raspberry_pi`, Tailscale (installed by `fleet/tailscale.yml`; joined manually with `--accept-routes` since the fleet runs `tailscale_up_skip: true`), the CI deploy key, and a node exporter. New local role `roles/touchkio` installs and auto-updates the [leukipp/touchkio](https://github.com/leukipp/touchkio) `.deb` (tracks the newest stable GitHub release, mirroring `install.sh`, and only downloads/installs when the version changes) and manages its systemd **user** service; `~/.config/touchkio/Arguments.json` is deliberately left unmanaged, because its MQTT password is AES-256-CBC encrypted with a key derived from `/etc/machine-id` and so cannot be reproduced from the vault. Wired in via `playbooks/machines/ha-kiosk.yml`, the `raspberry_pi` and `nodeexporters` groups, `site.yml`, and the `ha-kiosk:9100` scrape target in `roles/victoriametrics`. The first `full-upgrade` pulled a new kernel (6.18.50), and the kiosk was rebooted into it.
 
 ### Still to do
 

@@ -1,0 +1,5 @@
+---
+# The kiosk was set up as the regular `pi` user and its TouchKio config and HA
+# login live there, so it is managed as `pi` rather than the fleet-standard
+# `suhlig` (see inventory/group_vars/raspberry_pi.yml).
+ansible_user: pi

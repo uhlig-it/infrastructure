@@ -8,6 +8,7 @@
 - import_playbook: machines/pi5.yml
 - import_playbook: machines/pi0.yml
 - import_playbook: machines/kunakam.yml
+- import_playbook: machines/ha-kiosk.yml
 - import_playbook: machines/fortress.yml
 - import_playbook: machines/opus.yml
 - import_playbook: machines/pascal.yml

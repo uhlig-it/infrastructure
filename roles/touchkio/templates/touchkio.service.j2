@@ -1,0 +1,12 @@
+[Unit]
+Description=TouchKio
+After=graphical.target
+Wants=network-online.target
+
+[Service]
+ExecStart=/usr/bin/touchkio
+Restart=on-failure
+RestartSec=5s
+
+[Install]
+WantedBy=default.target

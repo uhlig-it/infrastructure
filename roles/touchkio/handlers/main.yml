@@ -1,0 +1,8 @@
+---
+- name: Restart touchkio
+  ansible.builtin.systemd:
+    name: "{{ touchkio_service_name }}"
+    scope: user
+    state: restarted
+  environment:
+    XDG_RUNTIME_DIR: "/run/user/{{ touchkio_user_uid }}"
