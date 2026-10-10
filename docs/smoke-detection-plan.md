@@ -4,35 +4,39 @@ Workspace/branch: `add-smoke-detection-via-INMP441`. wtg space at `~/workspace/a
 
 ## Goal
 
-Add an INMP441 I2S MEMS microphone so Frigate can raise `smoke_detector` / `fire_alarm` audio events for the smoke detectors. Everything deployed via Ansible. Status: planned; prototype at home first, then `pascal`.
+Add an INMP441 I2S MEMS microphone so Frigate can raise `smoke_detector` / `fire_alarm` audio events for the smoke detectors. Everything deployed via Ansible. Status: planned; the first sensor is at home (`ha-kiosk`), the shop follows via `pascal`.
 
 ## Decisions
 
-- **Host: `pascal`** (the 24/7 print server). It already runs `go2rtc` (role in this repo), Frigate already consumes an RTSP stream from it (`printer`), and it is more reliable than `shop`. `go2rtc` supports a direct `alsa:` source, so no separate streaming unit is needed.
-- **Prototype first on `ha-kiosk`** (home: the HA touch kiosk), with a second INMP441, then replicate on `pascal`. The home unit may stay as a smoke detector there. See Open questions.
-- **Boot config: a new local role, `i2s-mic`,** manages `/boot/firmware/config.txt`: set `dtparam=audio=off` (frees the I2S/PCM block that the onboard `bcm2835` audio uses) and add `dtoverlay=googlevoicehat-soundcard`; keep `dtparam=i2c_arm=on`. A reboot is required. The role directory also holds the wiring diagram.
+- **First sensor: `ha-kiosk`** (the Home Assistant touch kiosk, living room) — the production detector. It hosts the working INMP441 (`card 0: snd_rpi_googlevoicehat_soundcard`); its audio is published over RTSP and feeds the single Frigate at `opus` as an **audio-only** source, because there is no camera in the living room.
+- **Second sensor: `pascal`** (the 24/7 print server, workshop) — replication, not the first host. A second INMP441 adds a **shop-audio** stream to the same `opus` Frigate; `pascal` already runs `go2rtc` for the `printer` camera, so it needs no new streaming service.
+- **Boot config: the new local role `i2s-mic`** manages the boot config — `/boot/firmware/config.txt` on Bookworm and `/boot/config.txt` on bullseye — setting `dtparam=audio=off` (frees the I2S/PCM block the onboard `bcm2835` audio uses) and adding `dtoverlay=googlevoicehat-soundcard`, keeping `dtparam=i2c_arm=on`. A reboot is required. The role directory also holds the wiring diagram.
 - **I2C and I2S coexist.** The BME280/TSL2561 use I2C1 (GPIO2/3); I2S uses GPIO18/19/20. Different pins and peripherals, so only the onboard audio is disabled, not I2C. (`pascal` has no I2C sensors anyway.)
-- **Audio path: mic → RTSP → Frigate.** On `pascal`, a `go2rtc` stream (e.g. `mic: alsa:hw:<card>,0`) publishes the mic; Frigate's own go2rtc pulls it, and the `werkstatt` camera gets an `ffmpeg` input with the `audio` role.
+- **Audio path: mic → `go2rtc` → RTSP → Frigate (a single Frigate, at `opus`).** Each sensor host publishes its mic with `go2rtc` (e.g. `mic: alsa:hw:<card>,0`); the `opus` Frigate pulls both over the tailnet — `ha-kiosk` for living-room audio, `pascal` for shop audio. `pascal`'s stream attaches to the `werkstatt` camera's `audio` role; the living-room mic has no camera (see Open questions).
 - **Frigate camera vars: refactor** them out of the vaulted `inventory/host_vars/opus/secrets.yml` into plaintext `inventory/host_vars/opus/main.yml`, bridging only the MQTT password from the vault. Camera URLs are not secret; this avoids editing the vault on every camera change.
 - **Detection only** for now; no alerting integration yet.
-- **Unlock gating:** audio detection is disabled by the same `disarmed` profile that motion already uses (Frigate profiles can override the `audio` section). `shop-alarm` already switches the profile on lock/unlock, so it needs no change. Consequence: `min_volume` tuning only has to behave while the shop is locked.
+- **Unlock gating (shop only):** the shop streams are disabled by the same `disarmed` profile that motion already uses (Frigate profiles can override the `audio` section); `shop-alarm` already switches the profile on lock/unlock, so it needs no change. `ha-kiosk` (home) listens continuously. Consequence: shop `min_volume` tuning only has to behave while the shop is locked.
 - **Repo: keep everything in `infrastructure`.** No application code — hardware enablement, a thin stream, and config — so this matches the consolidation principle in `docs/consolidation-plan.md`. A separate repo would only add a release/CI pipeline for nothing.
 
 ## Architecture
 
 ```mermaid
 flowchart LR
-    subgraph host [pascal - Pi 3]
-        mic[INMP441<br/>I2S] -->|ALSA hw| g2r[go2rtc<br/>stream: mic]
+    subgraph home [ha-kiosk - Pi 4, living room]
+        hmic[INMP441<br/>I2S] -->|ALSA hw| hg2r[go2rtc<br/>stream: mic]
+    end
+    subgraph shop [pascal - Pi 3, workshop]
+        pmic[INMP441<br/>I2S] -->|ALSA hw| pg2r[go2rtc<br/>stream: mic]
     end
     subgraph opus [opus - NVR]
-        fg2r[Frigate go2rtc<br/>werkstatt_mic] --> ad[audio role<br/>+ audio detector]
+        fg2r[Frigate go2rtc] --> ad[audio role<br/>+ audio detector]
         ad --> mqtt[Frigate MQTT<br/>smoke_detector / fire_alarm]
     end
-    g2r -->|rtsp over tailnet| fg2r
+    hg2r -->|rtsp over tailnet| fg2r
+    pg2r -->|rtsp over tailnet| fg2r
 ```
 
-## INMP441 wiring (Pi 3)
+## INMP441 wiring (Pi 3 / Pi 4)
 
 | INMP441 | Pi pin | BCM |
 | --- | --- | --- |
@@ -47,6 +51,8 @@ The wiring diagram is rendered by [wiregen](https://github.com/WeebLabs/wiregen)
 
 ## Facts already gathered
 
+- `ha-kiosk` (first sensor) is a **Pi 4** on Debian trixie, managed as the `pi` user. The `i2s-mic` role has been applied: `dtoverlay=googlevoicehat-soundcard` + `dtparam=audio=off` in `/boot/firmware/config.txt`, and `arecord -l` now shows `card 0: snd_rpi_googlevoicehat_soundcard`. The card exposes **no ALSA mixer controls**, so any gain must be digital.
+- `pascal` (second sensor) is a **Pi 3 on Raspbian bullseye** (kernel 6.1); its boot config is `/boot/config.txt` (not `/boot/firmware/`), and `googlevoicehat-soundcard.dtbo` is present. No capture card yet.
 - `shop` is a Pi 3 Model B Rev 1.2, Raspbian 12 Bookworm, kernel 6.12 (`+rpt-rpi-v7`). `pascal` is a Pi 3 as well.
 - `shop` `/boot/firmware/config.txt`: `dtparam=i2c_arm=on`, `dtparam=audio=on`, `#dtparam=i2s=on` (commented), `dtoverlay=vc4-kms-v3d`, `camera_auto_detect=1`. Nothing manages `config.txt` in Ansible today.
 - `arecord -l` on `shop`: no capture device (only playback: `bcm2835 Headphones`, `vc4-hdmi`).
@@ -59,23 +65,25 @@ The wiring diagram is rendered by [wiregen](https://github.com/WeebLabs/wiregen)
 
 ### Phase 0 — role scaffold + prototype
 
-Create the `i2s-mic` role directory and put the wiring diagram in it (the wiregen source `inmp441-pi3.yaml` plus its rendered `inmp441-pi3.svg` / `.png`). The diagram belongs with the role it documents, and the role directory is needed from the outset to hold it.
+Create the `i2s-mic` role directory and put the wiring diagram in it (the wiregen source `inmp441-pi3.yaml` plus its rendered `inmp441-pi3.svg`). The diagram belongs with the role it documents, and the role directory is needed from the outset to hold it.
 
 On the chosen prototype host, add the two `config.txt` lines, reboot, confirm `arecord -l` shows a capture card, and record a sample. Settle the overlay (`googlevoicehat-soundcard` vs `dtparam=i2s=on` + `audioinjector-bare-i2s`) and the ALSA device id.
 
 ### Phase 1 — the role's tasks
 
-Fill in the `i2s-mic` role (directory created in Phase 0) with the tasks that manage `/boot/firmware/config.txt` (`dtparam=audio=off`, `dtoverlay=googlevoicehat-soundcard`, keep `i2c_arm=on`) and a reboot handler. This also closes the general gap that `config.txt` is currently unmanaged (even `i2c_arm` is only there by hand).
+The `i2s-mic` role manages the boot config (`/boot/firmware/config.txt` on Bookworm, `/boot/config.txt` on bullseye): `dtparam=audio=off`, `dtoverlay=googlevoicehat-soundcard`, keep `i2c_arm=on`, a reboot handler, and an `arecord -l` assertion. This also closes the general gap that the boot config was unmanaged (even `i2c_arm` was only set by hand). Applied to `ha-kiosk`; `pascal` (bullseye path) is still to do.
 
 ### Phase 2 — the audio stream
 
-On `pascal`, add a `go2rtc_streams` entry for the mic (the role already supports arbitrary sources and pascal already has a static ffmpeg). Fall back to a small `ffmpeg` systemd unit if go2rtc's ALSA source proves unreliable.
+On `ha-kiosk`, run `go2rtc` (add the role to `playbooks/machines/ha-kiosk.yml`) with a `mic:` stream (`alsa:hw:0,0` or by card), publishing the living-room audio as RTSP on the tailnet. It is audio-only, so no transcoding/static ffmpeg is expected; fall back to a small `ffmpeg` systemd unit if go2rtc's ALSA source proves unreliable. Replicate on `pascal` for shop audio afterwards.
 
 ### Phase 3 — Frigate audio detection
 
 - Refactor: move `frigate.cameras` to plaintext `inventory/host_vars/opus/main.yml`, bridging the MQTT password from the vault.
-- Extend `roles/frigate/templates/config.yml.j2` with an optional per-camera audio source: a go2rtc stream plus an `ffmpeg` input with `roles: [audio]`, and `audio: { enabled: true, listen: [smoke_detector, fire_alarm], min_volume: <tuned> }`.
-- Add `audio: { enabled: false }` to the `disarmed` profile.
+- Add `ha-kiosk`'s living-room mic to the single `opus` Frigate as an audio source: a go2rtc stream plus an `ffmpeg` input with `roles: [audio]`, and `audio: { enabled: true, listen: [smoke_detector, fire_alarm], min_volume: <tuned> }`. Settle how to present an audio-only source (see Open questions).
+- Attach `pascal`'s shop-audio stream to the `werkstatt` camera's `audio` role the same way.
+- Extend `roles/frigate/templates/config.yml.j2` to emit these optional per-camera audio inputs.
+- Add `audio: { enabled: false }` to the `disarmed` profile (shop only).
 
 ### Phase 4 — alerting (later)
 
@@ -83,10 +91,10 @@ Wire `shop-alarm`/HA to act on Frigate `smoke_detector`/`fire_alarm` events. Dep
 
 ## Open questions
 
-- **`kiosk` = `ha-kiosk`:** the prototype host is the Home Assistant touch kiosk — a **Raspberry Pi 4** on Debian trixie, already fleet-managed in `inventory/hosts.yml` (groups `raspberry_pi`, `nodeexporters`) and reachable on the tailnet as `ha-kiosk`, managed as the `pi` user (`inventory/host_vars/ha-kiosk.yml`). The `i2s-mic` role enables the capture overlay here. Open: whether it feeds `opus`'s Frigate (home) or its own.
+- **Audio-only in Frigate:** Frigate ties audio to a camera that also has video (a detect stream), but the living room has no camera. Decide how to expose `ha-kiosk`'s mic to the single `opus` Frigate — a dedicated camera with a synthetic/placeholder detect input, or another approach.
 - **`min_volume`:** unknown until we can sample the detectors; tune on the prototype.
-- **Reboot timing:** enabling I2S needs a reboot; on `pascal` do it between prints.
-- **`shop` disposition:** if `pascal` hosts the mic, `shop` keeps its I2C sensors unchanged; the unmanaged `shop` `config.txt` is still worth closing separately.
+- **Reboot timing:** the `i2s-mic` role reboots on change; done on `ha-kiosk`, but on `pascal` do it between prints.
+- **`shop` disposition:** `shop` keeps its I2C sensors unchanged; its unmanaged boot config is still worth closing separately.
 
 ## Related / out of scope
 
