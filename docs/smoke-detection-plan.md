@@ -79,19 +79,51 @@ The role managed the Pi's boot config (`/boot/firmware/config.txt` on Bookworm, 
 
 go2rtc on `ha-kiosk` published the mic as `rtsp://ha-kiosk:8554/mic` using an ffmpeg `exec:` source (native `alsa:` only emits raw S16LE and go2rtc's `ffmpeg:` source would not produce), AAC mono, with the listeners tailnet-bound. Superseded: with a streaming ESP32 the stream originates at the node and no go2rtc runs on the sensor side. Reverted: the `go2rtc` role and mic stream were removed from `ha-kiosk`, and on 2026-10-10 its host was cleaned up — the `config.txt` overlay removed, `dtparam=audio` restored, `go2rtc` uninstalled, and the host rebooted (confirmed: no capture card, onboard `bcm2835` audio back).
 
-### Phase 3 — ESP32 sensor node (current)
+### Phase 3 — ESP32 sensor node (done)
 
-- Flash the node firmware from [`uhlig-it/esp32-mic-node`](https://github.com/uhlig-it/esp32-mic-node) (an audio-only RTSP sketch on a vendored `rjsachse/ESP32-RTSPServer`). It serves `rtsp://<node>:554/` — `L16` mono PCM — with RTSP Basic auth.
-- Wire the INMP441 per the diagram; power the board; join the WLAN.
-- Give the node a stable address: a reservation in `shop-router/hosts.yml` for the shop; a reservation or static address at home.
-- Prove `opus` can pull it over the tailnet (`ffprobe`/`ffplay` the URL) before touching Frigate.
+- Firmware built and flashed on **home site** (living room). ESP32-DevKitC V4
+  (ESP32-WROOM-32) at `192.168.10.243`, WLAN `uhlig.iot`. Stream URL:
+  `rtsp://frigate:PASSWORD@192.168.10.243:554/`.
+  Stream format: L16 mono PCM, 16 kHz, 256 kb/s. Verified with ffplay on Mac.
+- Three bugs fixed in `rjsachse/ESP32-RTSPServer` and committed as three separate
+  commits (PR #35): https://github.com/rjsachse/ESP32-RTSPServer/pull/35
+
+  1. **`1c1064` — Null deref in `handleOptions`** — `pathStart` used before NULL
+     check when the request doesn't contain `rtsp://` (e.g. `OPTIONS * RTSP/1.0`).
+  2. **`36f777` — `ps_malloc()` on chips without PSRAM** — falls back to
+     `malloc()` (internal SRAM 320 KB); without this the server silently drops
+     all connections on ESP32-WROOM-32.
+  3. **`f121ef` — Re-authentication on every request** — skips auth for
+     established sessions (`session.sessionID != 0`), matching RFC 2326 session
+     semantics so ffplay/vlc don't get 401 on SETUP/PLAY.
+
+- **README.md** in `uhlig-it/esp32-mic-node` documents the working `ffplay`
+  commands (no `-rtsp_transport tcp` — the transport flag causes failures with
+  this RTSP server implementation) and all prerequisites.
+- **Shop site:** not yet deployed (needs INMP441 hardware + wiring + shop-router
+  DHCP reservation).
+- **Stable address (shop):** DHCP reservation in `shop-router/hosts.yml` is one
+  entry — pending hardware.
+- **Reachability test:** home node verified reachable from this Mac over the
+  local network (`ffplay rtsp://frigate:PASSWORD@192.168.10.243:554/`).
+  Tailnet reachability from `opus` will be confirmed when the node is deployed
+  and the `--accept-routes` / tailnet path is in place.
+- **Upstream PR:** PR #35 against `rjsachse/ESP32-RTSPServer` contains the three
+  commits. (Pushed to fork and submitted — pending upstream review.)
 
 ### Phase 4 — Frigate audio detection
 
-- Refactor `frigate.cameras` into plaintext `host_vars/opus/main.yml`, bridging the MQTT password from the vault.
-- Add the living-room node to `opus` as an **audio-only** source (go2rtc source + `ffmpeg` input with `roles: [audio]`, `audio: { enabled: true, listen: [smoke_detector, fire_alarm], min_volume: <tuned> }`); settle how an audio-only source is presented (see Open questions).
+In progress. Steps:
+
+- Refactor `frigate.cameras` (currently vaulted in `inventory/host_vars/opus/secrets.yml`)
+  into plaintext `inventory/host_vars/opus/main.yml`, bridging only the MQTT
+  password from the vault.
+- Add the living-room node (`192.168.10.243`) to `opus` as an **audio-only** source
+  (go2rtc source + `ffmpeg` input with `roles: [audio]`, `audio: { enabled: true,
+  listen: [smoke_detector, fire_alarm], min_volume: <tuned> }`).
 - Attach the workshop node to the `werkstatt` camera's `audio` role the same way.
-- Extend `roles/frigate/templates/config.yml.j2` to emit these optional per-camera audio inputs.
+- Extend `roles/frigate/templates/config.yml.j2` to emit optional per-camera audio
+  inputs.
 - Add `audio: { enabled: false }` to the `disarmed` profile (shop only).
 - Deploy and tune `min_volume`.
 
