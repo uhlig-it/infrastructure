@@ -17,7 +17,7 @@ tailscale_services:
     backend: http://localhost:3001
 
 # Frigate: camera sources and the (non-secret) audio wiring live here in
-# plaintext; only the MQTT password and the node's RTSP password are vaulted.
+# plaintext; only the MQTT password and the node's RTSP/HTTP passwords are vaulted.
 frigate:
   mqtt:
     host: "100.102.100.41"
@@ -31,6 +31,6 @@ frigate:
     living_room: # INMP441 node at home (audio only; no camera)
       mic: "rtsp://frigate:{{ vault_mic_rtsp_password }}@192.168.10.40:554/"
       # Frigate decodes a stream for every camera; the node has no camera, so it
-      # serves a fixed 320x240 frame (~1 fps) as the decode/detect input.
+      # serves a fixed 640x480 test card (~1 fps) as the decode/detect input.
       video: "http://monitor:{{ vault_mic_http_password }}@192.168.10.40/dummy.mjpg"
       audio_only: true

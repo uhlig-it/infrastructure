@@ -4,7 +4,7 @@ Workspace/branch: `add-smoke-detection-via-INMP441`. wtg space at `~/workspace/a
 
 ## Goal
 
-Add INMP441 I2S MEMS microphones so Frigate can raise `smoke_detector` / `fire_alarm` audio events for the smoke detectors. Each sensor is a self-contained **ESP32 node** that publishes its microphone on the network; the single Frigate at `opus` consumes the streams as audio sources. Everything is deployed from this repo. Status: planned; two sites — the living room at home and the workshop at the shop.
+Add INMP441 I2S MEMS microphones so Frigate can raise `smoke_detector` / `fire_alarm` audio events for the smoke detectors. Each sensor is a self-contained **ESP32 node** that publishes its microphone on the network; the single Frigate at `opus` consumes the streams as audio sources. Everything is deployed from this repo. Status: the **home** node (living room) is deployed, flashed and feeding Frigate's audio detection; the **shop** node is pending hardware. Two sites — the living room at home and the workshop at the shop.
 
 ## Why an ESP32 node instead of wiring the mic to the Pi
 
@@ -16,12 +16,12 @@ An ESP32 (a few euros, Wi-Fi built in) captures the mic locally over that short 
 
 - **Sensor node: ESP32-DevKitC V4** (Espressif, ESP32-WROOM-32). One per site, powered from a USB supply and joined to the local WLAN.
 - **Mic: INMP441**, on the ESP32's I2S0 peripheral, wired with a short harness (see the wiring table).
-- **Transport: a dedicated RTSP/HTTP streamer firmware** on the ESP32 — *not* ESPHome (ESPHome reads the mic but has no audio *server*), chosen so Frigate's bundled go2rtc can pull it like any camera. Selected: an audio-only RTSP sketch on **`rjsachse/ESP32-RTSPServer`** (a generic-ESP32 library with RTSP Basic auth); see [`uhlig-it/esp32-mic-node`](https://github.com/uhlig-it/esp32-mic-node).
+- **Transport: a dedicated RTSP/HTTP streamer firmware** on the ESP32 — *not* ESPHome (ESPHome reads the mic but has no audio *server*). **Frigate pulls the node's RTSP directly**: go2rtc cannot restream an audio-only source (its RTSP server carries video only), so the audio bypasses go2rtc. Selected: **`rjsachse/ESP32-RTSPServer`** (a generic-ESP32 library with RTSP Basic auth), **vendored** under `lib/` in [`uhlig-it/esp32-mic-node`](https://github.com/uhlig-it/esp32-mic-node) so we can patch it — upstream is dormant. See that repo's README and `lib/ESP32-RTSPServer/UPSTREAM.md`.
 - **Auth: HTTP Basic** on the stream. Sufficient because the stream is only pulled by `opus` over the tailnet (and, in the shop, only across the shop-router WLAN), so the WLAN/tailnet is the trust boundary rather than the credential. Use an isolated/IoT SSID where practical, and upgrade to Digest if the chosen firmware supports it.
-- **Stable addressing: a DHCP reservation** — in the shop via `github.com/uhlig-it/shop-router` (`hosts.yml`, installed by `configure.sh`); at home via the router's reservation or a static IP — so the Frigate URL never moves.
+- **Stable addressing: a DHCP reservation** — at home a static reservation gives the node `192.168.10.40`; in the shop via `github.com/uhlig-it/shop-router` (`hosts.yml`, installed by `configure.sh`, one entry). The Frigate URL never moves.
 - **Reachability (shop): over the tailnet, via `shop`'s subnet router.** The workshop WLAN *is* the `shop-router` LAN, `192.168.1.0/24`; `shop` advertises that route and `opus` runs `--accept-routes`, so `opus` reaches a `192.168.1.x` ESP32 directly and Frigate pulls its stream with no relay on `shop`/`pascal`.
 - **Single Frigate, at `opus`.** Both sensors feed it: the living-room node as audio-only (there is no camera there), the workshop node alongside the `werkstatt` camera's audio.
-- **Frigate camera vars: refactor** them out of the vaulted `inventory/host_vars/opus/secrets.yml` into plaintext `inventory/host_vars/opus/main.yml`, bridging only the MQTT password from the vault. Camera URLs are not secret; this avoids editing the vault on every camera change.
+- **Frigate camera vars: refactored** (done) out of the vaulted `inventory/host_vars/opus/secrets.yml` into plaintext `inventory/host_vars/opus/main.yml`, bridging only the MQTT password and the node's RTSP/HTTP passwords from the vault. Camera URLs are not secret; this avoids editing the vault on every camera change.
 - **Detection only** for now; no alerting integration yet.
 - **Unlock gating (shop only):** the shop stream is disabled by the same `disarmed` profile that motion already uses (Frigate profiles can override the `audio` section); `shop-alarm` already switches the profile on lock/unlock, so it needs no change. The home node listens continuously.
 - **Repo: split.** The node's firmware and its wiring diagram live in [`uhlig-it/esp32-mic-node`](https://github.com/uhlig-it/esp32-mic-node); this repo keeps the plan and the Frigate/Ansible config. A PlatformIO build, a released `.bin`, and the likelihood of patching a dormant upstream make the firmware application code — which the consolidation principle puts in its own repo (`docs/consolidation-plan.md`).
@@ -32,17 +32,17 @@ An ESP32 (a few euros, Wi-Fi built in) captures the mic locally over that short 
 ```mermaid
 flowchart LR
     subgraph home [home - living room]
-        hmic[INMP441 I2S] --> hesp[ESP32-DevKitC V4<br/>RTSP/HTTP stream]
+        hmic[INMP441 I2S] --> hesp[ESP32-DevKitC V4<br/>RTSP audio + placeholder video]
     end
     subgraph shop [shop - workshop WLAN 192.168.1.0/24]
-        smic[INMP441 I2S] --> sesp[ESP32-DevKitC V4<br/>RTSP/HTTP stream]
+        smic[INMP441 I2S] --> sesp[ESP32-DevKitC V4<br/>RTSP audio + placeholder video]
     end
     subgraph opus [opus - NVR]
-        fg2r[Frigate go2rtc] --> ad[audio detector]
+        fg[Frigate] --> ad[audio detector]
         ad --> mqtt[Frigate MQTT<br/>smoke_detector / fire_alarm]
     end
-    hesp -->|stream over tailnet| fg2r
-    sesp -->|stream over tailnet, via shop subnet router| fg2r
+    hesp -->|RTSP audio, direct| fg
+    sesp -->|RTSP audio, via shop subnet router| fg
 ```
 
 ## INMP441 wiring (ESP32-DevKitC V4)
@@ -63,7 +63,7 @@ The diagram is rendered by [wiregen](https://github.com/WeebLabs/wiregen) from [
 - **Pi prototype (superseded):** `ha-kiosk` (Pi 4, Debian trixie) ran the INMP441 directly — the `i2s-mic` role set `dtoverlay=googlevoicehat-soundcard` + `dtparam=audio=off` in `/boot/firmware/config.txt`, `arecord -l` showed `card 0: snd_rpi_googlevoicehat_soundcard`, and go2rtc published `rtsp://ha-kiosk:8554/mic` (AAC 48 kHz mono, left channel) with its listeners bound to the tailnet address. This proved the mic and the mic→go2rtc→RTSP→Frigate shape. Under the ESP32 decision it is retired: the Pi-side setup has been removed and `ha-kiosk` reverted.
 - **Workshop WLAN / reachability (verified):** the workshop WLAN is the `shop-router` LAN, `192.168.1.0/24`. `shop` advertises that route (`--advertise-routes=192.168.1.0/24 --accept-routes`) and `opus` accepts routes (`--accept-routes`), so `opus` reaches it. `http://192.168.1.10/` (a Tasmota plug on that LAN) answers `401` with `WWW-Authenticate: Basic realm="Login Required"`, confirming the route is approved *and* that a Basic-auth device is reachable from the tailnet. `shop`'s `net.ipv4.ip_forward` is `1`.
 - **DHCP reservations (shop):** `github.com/uhlig-it/shop-router` holds `hosts.yml` (`name`/`mac`/`ip`), applied by `configure.sh`; adding the ESP32 is one entry.
-- **Frigate:** runs `ghcr.io/blakeblackshear/frigate:stable` (0.15) with a USB Coral at `opus`; cameras come from `frigate.cameras` (currently vaulted in `inventory/host_vars/opus/secrets.yml`) and are rendered by `roles/frigate/templates/config.yml.j2`, which emits only `detect` + `record`. Audio labels `smoke_detector` and `fire_alarm` exist; profiles can override the `audio` section.
+- **Frigate:** runs `ghcr.io/blakeblackshear/frigate:stable` (**0.18.0**) with a USB Coral at `opus`. Cameras come from `frigate.cameras` in plaintext `inventory/host_vars/opus/main.yml` (refactored out of the vault) and are rendered by `roles/frigate/templates/config.yml.j2`, which now emits `detect`/`record`/`live`/`snapshots` plus optional per-camera `audio` and a placeholder `video` input. Audio labels `smoke_detector` and `fire_alarm` exist; profiles can override the `audio` section.
 
 ## Work plan
 
@@ -81,7 +81,7 @@ go2rtc on `ha-kiosk` published the mic as `rtsp://ha-kiosk:8554/mic` using an ff
 
 ### Phase 3 — ESP32 sensor node (done)
 
-- Firmware built and flashed on **home site** (living room). ESP32-DevKitC V4 (ESP32-WROOM-32) at `192.168.10.40` (a static reservation on the home router), WLAN `uhlig.wlan`. Stream URL: `rtsp://frigate:PASSWORD@192.168.10.40:554/`. Stream format: L16 mono PCM, 16 kHz, 256 kb/s. Verified with ffplay on Mac.
+- Firmware built and flashed on **home site** (living room). ESP32-DevKitC V4 (ESP32-WROOM-32) at `192.168.10.40` (a static reservation on the home router), WLAN `uhlig.wlan`. Stream URL: `rtsp://frigate:PASSWORD@192.168.10.40:554/` (the credential is in `include/secrets.h`). Stream format: L16 mono PCM, 16 kHz, 256 kb/s. Verified with ffplay on Mac.
 - Three bugs fixed in `rjsachse/ESP32-RTSPServer` and committed as three separate commits (PR #35): https://github.com/rjsachse/ESP32-RTSPServer/pull/35
 
   1. **`1c1064` — Null deref in `handleOptions`** — `pathStart` used before NULL check when the request doesn't contain `rtsp://` (e.g. `OPTIONS * RTSP/1.0`).
@@ -89,18 +89,19 @@ go2rtc on `ha-kiosk` published the mic as `rtsp://ha-kiosk:8554/mic` using an ff
   3. **`f121ef` — Re-authentication on every request** — skips auth for established sessions (`session.sessionID != 0`), matching RFC 2326 session semantics so ffplay/vlc don't get 401 on SETUP/PLAY.
 
 - **README.md** in `uhlig-it/esp32-mic-node` documents the working `ffplay` commands (no `-rtsp_transport tcp` — the transport flag causes failures with this RTSP server implementation) and all prerequisites.
-- The node also serves a **Basic-auth HTTP endpoint on port 80**: a status page at `/` and Prometheus metrics at `/metrics` (`esp32_mic_*`, including the active `ssid`/`network`) for VictoriaMetrics to scrape. It joins a **secondary Wi-Fi** as a fallback when the primary is unreachable.
+- The node also runs a **Basic-auth HTTP server on port 80** (`src/web.cpp`): a live status page at `/` (server-sent events), Prometheus metrics at `/metrics` (`esp32_mic_*`, incl. the active `ssid`, the `network` role and a `build` stamp) for VictoriaMetrics to scrape, a firmware-upload form at `/update` (plus ArduinoOTA), and the placeholder frame at `/dummy.mjpg`. It joins a **secondary Wi-Fi** if the primary is unreachable within 10 s.
+- A parametric **3D-printable enclosure** for the node ships in `design/` (FreeCAD model → STL, plus a tuned Cura profile).
 - **Shop site:** not yet deployed (needs INMP441 hardware + wiring + shop-router DHCP reservation).
 - **Stable address (shop):** DHCP reservation in `shop-router/hosts.yml` is one entry — pending hardware.
-- **Reachability test:** home node verified reachable from this Mac over the local network (`ffplay rtsp://frigate:PASSWORD@192.168.10.40:554/`). Tailnet reachability from `opus` will be confirmed when the node is deployed and the `--accept-routes` / tailnet path is in place.
+- **Reachability test:** the home node is verified reachable from this Mac (`ffplay`) *and* from `opus` — Frigate's stats report the `living_room` camera live with audio (the home node shares `opus`'s LAN, so no relay is involved).
 - **Upstream PR:** PR #35 against `rjsachse/ESP32-RTSPServer` contains the three commits. (Pushed to fork and submitted — pending upstream review.)
 
 ### Phase 4 — Frigate audio detection (done; home node)
 
 - Refactored `frigate.cameras` (with `mqtt.host`/`user`) out of the vault into plaintext `inventory/host_vars/opus/main.yml`; the vault keeps only `vault_frigate_mqtt_password` and the nodes' passwords. Camera URLs are not secret, so a camera change no longer touches the vault.
-- The home node (`192.168.10.40`) is a Frigate camera, `living_room`: its audio arrives over RTSP (`roles: [audio]`), with a global `audio.listen: [smoke_detector, fire_alarm]` and `min_volume: 500`. Confirmed live — Frigate's stats report `audio_rms ~6` for the quiet room.
+- The home node (`192.168.10.40`) is a Frigate camera, `living_room`: its audio arrives over RTSP (`roles: [audio]`), with a global `audio.listen: [smoke_detector, fire_alarm]` and `min_volume: 500`. Confirmed live — Frigate's stats report a low `audio_rms` (~6–11) for the quiet room.
 - `roles/frigate/templates/config.yml.j2` grew optional per-camera audio (`mic`, `audio_only`, `disarm_audio`) plus the global `audio:` block.
-- **Frigate needs a video stream for every camera** — it "always decodes a stream ... even if [object detection is] disabled", and has no video-less camera mode. So `living_room` also gets a `detect` input that is a **placeholder MJPEG** (a fixed 320×240 frame at ~1 fps) the mic node itself serves at `http://<node>/dummy.mjpg`; `detect`/`record`/`snapshots` are off for it and `hwaccel_args` is cleared (the global QSV preset does not apply to MJPEG). go2rtc cannot restream an audio-only source (its RTSP server carries video only), which is why Frigate reads the node directly.
+- **Frigate needs a video stream for every camera** — it "always decodes a stream ... even if [object detection is] disabled", and has no video-less camera mode. So `living_room` also gets a `detect` input that is a **placeholder MJPEG**: a fixed 640×480 FuBK test card captioned "This stream is audio-only" (~1 fps) that the mic node itself serves at `http://<node>/dummy.mjpg`. `detect`/`record`/`snapshots` are off for it and `hwaccel_args` is cleared (the global QSV preset does not apply to MJPEG). go2rtc cannot restream an audio-only source (its RTSP server carries video only), which is why Frigate reads the node directly. The node credits the card's Wikimedia original (CC BY-SA 3.0) and shows it in a Video section on the status page.
 - **Shop node: pending hardware.** `werkstatt` will take its audio through the same `mic` mechanism; `disarm_audio` is already supported so the shop stream mutes with the `disarmed` profile.
 - **Tune `min_volume`** against a real alarm (the quiet-room RMS is ~6, so 500 is the gate until then).
 
