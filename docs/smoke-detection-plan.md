@@ -95,16 +95,14 @@ go2rtc on `ha-kiosk` published the mic as `rtsp://ha-kiosk:8554/mic` using an ff
 - **Reachability test:** home node verified reachable from this Mac over the local network (`ffplay rtsp://frigate:PASSWORD@192.168.10.40:554/`). Tailnet reachability from `opus` will be confirmed when the node is deployed and the `--accept-routes` / tailnet path is in place.
 - **Upstream PR:** PR #35 against `rjsachse/ESP32-RTSPServer` contains the three commits. (Pushed to fork and submitted — pending upstream review.)
 
-### Phase 4 — Frigate audio detection
+### Phase 4 — Frigate audio detection (done; home node)
 
-In progress. Steps:
-
-- Refactor `frigate.cameras` (currently vaulted in `inventory/host_vars/opus/secrets.yml`) into plaintext `inventory/host_vars/opus/main.yml`, bridging only the MQTT password from the vault.
-- Add the living-room node (`192.168.10.40`) to `opus` as an **audio-only** source (go2rtc source + `ffmpeg` input with `roles: [audio]`, `audio: { enabled: true, listen: [smoke_detector, fire_alarm], min_volume: <tuned> }`).
-- Attach the workshop node to the `werkstatt` camera's `audio` role the same way.
-- Extend `roles/frigate/templates/config.yml.j2` to emit optional per-camera audio inputs.
-- Add `audio: { enabled: false }` to the `disarmed` profile (shop only).
-- Deploy and tune `min_volume`.
+- Refactored `frigate.cameras` (with `mqtt.host`/`user`) out of the vault into plaintext `inventory/host_vars/opus/main.yml`; the vault keeps only `vault_frigate_mqtt_password` and the nodes' passwords. Camera URLs are not secret, so a camera change no longer touches the vault.
+- The home node (`192.168.10.40`) is a Frigate camera, `living_room`: its audio arrives over RTSP (`roles: [audio]`), with a global `audio.listen: [smoke_detector, fire_alarm]` and `min_volume: 500`. Confirmed live — Frigate's stats report `audio_rms ~6` for the quiet room.
+- `roles/frigate/templates/config.yml.j2` grew optional per-camera audio (`mic`, `audio_only`, `disarm_audio`) plus the global `audio:` block.
+- **Frigate needs a video stream for every camera** — it "always decodes a stream ... even if [object detection is] disabled", and has no video-less camera mode. So `living_room` also gets a `detect` input that is a **placeholder MJPEG** (a fixed 320×240 frame at ~1 fps) the mic node itself serves at `http://<node>/dummy.mjpg`; `detect`/`record`/`snapshots` are off for it and `hwaccel_args` is cleared (the global QSV preset does not apply to MJPEG). go2rtc cannot restream an audio-only source (its RTSP server carries video only), which is why Frigate reads the node directly.
+- **Shop node: pending hardware.** `werkstatt` will take its audio through the same `mic` mechanism; `disarm_audio` is already supported so the shop stream mutes with the `disarmed` profile.
+- **Tune `min_volume`** against a real alarm (the quiet-room RMS is ~6, so 500 is the gate until then).
 
 ### Phase 5 — alerting (later)
 
@@ -112,8 +110,7 @@ Wire `shop-alarm`/HA to act on Frigate `smoke_detector`/`fire_alarm` events. Dep
 
 ## Open questions
 
-- **Audio-only in Frigate:** Frigate normally ties audio to a camera that also has video, but the living room has no camera. Decide how to expose the node to `opus` — a synthetic/placeholder detect input, or an audio-only camera if Frigate 0.15 accepts one.
-- **`min_volume`:** unknown until we can sample the detectors; tune on the node.
+- **`min_volume`:** tune against a real smoke/fire alarm sound (the quiet-room RMS is ~6, so 500 is the gate until then).
 
 ## Related / out of scope
 

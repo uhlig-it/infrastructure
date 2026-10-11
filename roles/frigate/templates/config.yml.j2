@@ -11,17 +11,60 @@ profiles:
     friendly_name: Disarmed
   armed:
     friendly_name: Armed
+# Audio events (smoke/fire) run on the INMP441 node streams. `listen` and
+# min_volume are global; a camera opts in with an `audio` input and a
+# camera-level `audio.enabled`. The global default stays off, so cameras
+# without a microphone are untouched. See docs/smoke-detection-plan.md.
+audio:
+  listen:
+    - smoke_detector
+    - fire_alarm
+  min_volume: {{ frigate_audio_min_volume }}
 cameras:
 {% for name, camera in frigate.cameras.items() %}
+{% set audio_only = camera.audio_only | default(false) %}
+{% set has_audio = camera.mic is defined %}
   {{ name }}:
     enabled: true
     ffmpeg:
+{% if audio_only %}
+      hwaccel_args: ""   # the placeholder is MJPEG; the GPU decode preset doesn't apply
+{% endif %}
       inputs:
+{% if camera.source is defined %}
         - path: rtsp://127.0.0.1:8554/{{ name }}
           input_args: preset-rtsp-restream
           roles:
             - detect
+{% if not audio_only %}
             - record
+{% endif %}
+{% elif camera.video is defined %}
+        # A placeholder decode source: the audio-only node serves a fixed frame
+        # (Frigate decodes a stream per camera, even with detect disabled).
+        # Not RTSP, so the default rtsp input args don't apply.
+        - path: {{ camera.video }}
+          input_args: "-avoid_negative_ts make_zero -fflags +genpts+discardcorrupt -use_wallclock_as_timestamps 1"
+          roles:
+            - detect
+{% endif %}
+{% if has_audio %}
+        # The microphone node serves a single RTSP client; being audio-only,
+        # go2rtc cannot restream it, so Frigate reads the node directly.
+        - path: {{ camera.mic }}
+          roles:
+            - audio
+    audio:
+      enabled: true
+{% endif %}
+{% if audio_only %}
+    detect:
+      enabled: false
+    record:
+      enabled: false
+    snapshots:
+      enabled: false
+{% else %}
     live:
       streams:
         Stream 1: {{ name }}
@@ -32,25 +75,39 @@ cameras:
         labels: [person]
     mqtt:
       enabled: false # do not publish snapshot via mqtt
+{% endif %}
     profiles:
       armed:
+{% if not audio_only %}
         detect:
           enabled: true
         record:
           enabled: true
+{% endif %}
+{% if has_audio %}
+        audio:
+          enabled: true
+{% endif %}
       disarmed:
+{% if not audio_only %}
         detect:
           enabled: false
         motion:
           enabled: false
         record:
           enabled: false
+{% endif %}
+{% if has_audio %}
+        audio:
+          enabled: {{ 'false' if camera.disarm_audio | default(false) else 'true' }}
+{% endif %}
 {% endfor %}
-# go2rtc holds the real camera source; the camera above reads Frigate's own
-# restream so it can be opened once and shared (detect + record + live).
+# go2rtc holds the real video sources; each camera above reads Frigate's own
+# restream so a stream is opened once and shared (detect + record + live).
+# (Audio-only microphones are read directly by Frigate -- see above.)
 go2rtc:
   streams:
-{% for name, camera in frigate.cameras.items() %}
+{% for name, camera in frigate.cameras.items() if camera.source is defined %}
     {{ name }}:
       - {{ camera.source }}
 {% endfor %}
