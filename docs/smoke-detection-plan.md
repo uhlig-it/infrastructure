@@ -82,8 +82,9 @@ go2rtc on `ha-kiosk` published the mic as `rtsp://ha-kiosk:8554/mic` using an ff
 ### Phase 3 — ESP32 sensor node (done)
 
 - Firmware built and flashed on **home site** (living room). ESP32-DevKitC V4
-  (ESP32-WROOM-32) at `192.168.10.243`, WLAN `uhlig.iot`. Stream URL:
-  `rtsp://frigate:PASSWORD@192.168.10.243:554/`.
+  (ESP32-WROOM-32) at `192.168.10.40` (a static reservation on the home router),
+  WLAN `uhlig.wlan`. Stream URL:
+  `rtsp://frigate:PASSWORD@192.168.10.40:554/`.
   Stream format: L16 mono PCM, 16 kHz, 256 kb/s. Verified with ffplay on Mac.
 - Three bugs fixed in `rjsachse/ESP32-RTSPServer` and committed as three separate
   commits (PR #35): https://github.com/rjsachse/ESP32-RTSPServer/pull/35
@@ -100,12 +101,16 @@ go2rtc on `ha-kiosk` published the mic as `rtsp://ha-kiosk:8554/mic` using an ff
 - **README.md** in `uhlig-it/esp32-mic-node` documents the working `ffplay`
   commands (no `-rtsp_transport tcp` — the transport flag causes failures with
   this RTSP server implementation) and all prerequisites.
+- The node also serves a **Basic-auth HTTP endpoint on port 80**: a status page
+  at `/` and Prometheus metrics at `/metrics` (`esp32_mic_*`, including the active
+  `ssid`/`network`) for VictoriaMetrics to scrape. It joins a **secondary Wi-Fi**
+  as a fallback when the primary is unreachable.
 - **Shop site:** not yet deployed (needs INMP441 hardware + wiring + shop-router
   DHCP reservation).
 - **Stable address (shop):** DHCP reservation in `shop-router/hosts.yml` is one
   entry — pending hardware.
 - **Reachability test:** home node verified reachable from this Mac over the
-  local network (`ffplay rtsp://frigate:PASSWORD@192.168.10.243:554/`).
+  local network (`ffplay rtsp://frigate:PASSWORD@192.168.10.40:554/`).
   Tailnet reachability from `opus` will be confirmed when the node is deployed
   and the `--accept-routes` / tailnet path is in place.
 - **Upstream PR:** PR #35 against `rjsachse/ESP32-RTSPServer` contains the three
@@ -118,7 +123,7 @@ In progress. Steps:
 - Refactor `frigate.cameras` (currently vaulted in `inventory/host_vars/opus/secrets.yml`)
   into plaintext `inventory/host_vars/opus/main.yml`, bridging only the MQTT
   password from the vault.
-- Add the living-room node (`192.168.10.243`) to `opus` as an **audio-only** source
+- Add the living-room node (`192.168.10.40`) to `opus` as an **audio-only** source
   (go2rtc source + `ffmpeg` input with `roles: [audio]`, `audio: { enabled: true,
   listen: [smoke_detector, fire_alarm], min_volume: <tuned> }`).
 - Attach the workshop node to the `werkstatt` camera's `audio` role the same way.
