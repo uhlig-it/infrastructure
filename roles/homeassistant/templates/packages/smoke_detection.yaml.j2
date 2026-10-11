@@ -1,0 +1,65 @@
+# {{ ansible_managed }}
+#
+# Emergency smoke/fire pushes from Frigate's audio detection (the INMP441 mic
+# nodes; see docs/smoke-detection-plan.md, Phase 5). Loaded through the
+# `packages:` include the role adds to configuration.yaml.
+#
+# Managed here, not in the UI: the container is restarted on deploy, so edits
+# made in Home Assistant's UI would be lost. The alert is `critical`, so it
+# bypasses the iPhone's silent switch / Do Not Disturb.
+automation:
+  - id: mic_living_room_smoke_emergency
+    alias: 'Wohnzimmer Mic: fire/smoke emergency push'
+    mode: single
+    trigger:
+      - platform: mqtt
+        topic: frigate/living_room/audio/smoke_detector
+        payload: 'ON'
+      - platform: mqtt
+        topic: frigate/living_room/audio/fire_alarm
+        payload: 'ON'
+    action:
+      - action: {{ homeassistant_smoke_notify_service }}
+        continue_on_error: true
+        data:
+          title: 🚨 Rauchalarm Wohnzimmer
+          message: "Frigate detected a smoke or fire alarm sound in the living room.\n\nLive: https://eye.tailnet-204f.ts.net/#living_room"
+          data:
+            push:
+              sound:
+                name: default
+                critical: 1
+                volume: 1.0
+            tag: smoke-alarm
+            group: smoke-alarm
+
+  - id: werkstatt_alarm_fire_notify
+    alias: 'Werkstatt Alarm: fire/smoke push'
+    mode: single
+    trigger:
+      - platform: mqtt
+        topic: frigate/werkstatt/audio/fire_alarm
+        payload: 'ON'
+      - platform: mqtt
+        topic: frigate/werkstatt/audio/smoke_detector
+        payload: 'ON'
+    condition:
+      - condition: not
+        conditions:
+          - condition: state
+            entity_id: alarm_control_panel.werkstatt
+            state: triggered
+    action:
+      - action: {{ homeassistant_smoke_notify_service }}
+        continue_on_error: true
+        data:
+          title: 🚨 Feuer/Rauch Werkstatt
+          message: "Frigate detected a smoke or fire alarm sound in the workshop.\n\nLive: https://eye.tailnet-204f.ts.net/#werkstatt"
+          data:
+            push:
+              sound:
+                name: default
+                critical: 1
+                volume: 1.0
+            tag: smoke-alarm
+            group: smoke-alarm

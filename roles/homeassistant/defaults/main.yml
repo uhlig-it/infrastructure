@@ -1,0 +1,11 @@
+---
+# Home Assistant's config directory on the host; the container bind-mounts it as
+# /config. The role manages a `packages/` file here (see templates/packages/).
+homeassistant_config_dir: /opt/homeassistant
+
+# Emergency smoke/fire alerts go to this mobile_app notify *service* rather than
+# the notify *entity*: a critical alert carries a data payload
+# (data.push.sound.critical) that the newer notify.send_message entity action
+# cannot. The service name is `notify.mobile_app_<slug of the app device name>`
+# (see the mobile_app docs).
+homeassistant_smoke_notify_service: notify.mobile_app_iphone_15_pro_steffen
