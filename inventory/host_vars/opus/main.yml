@@ -28,9 +28,6 @@ frigate:
       source: "ffmpeg:rtsp://shop.tailnet-204f.ts.net:8554/cam"
     printer:
       source: "rtsp://pascal.tailnet-204f.ts.net:8554/printer"
-    living_room: # INMP441 node at home (audio only; no camera)
-      mic: "rtsp://frigate:{{ vault_mic_rtsp_password }}@192.168.10.40:554/"
-      # Frigate decodes a stream for every camera; the node has no camera, so it
-      # serves a fixed 640x480 test card (~1 fps) as the decode/detect input.
-      video: "http://monitor:{{ vault_mic_http_password }}@192.168.10.40/dummy.mjpg"
-      audio_only: true
+  # The INMP441 node is deliberately NOT a Frigate camera: Frigate's audio model
+  # does not detect our (German) smoke alarms, so a purpose-built detector reads
+  # the node's stream directly instead. See docs/smoke-detection-plan.md.
