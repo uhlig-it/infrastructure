@@ -4,7 +4,7 @@ Workspace/branch: `add-smoke-detection-via-INMP441`. wtg space at `~/workspace/a
 
 ## Goal
 
-Add INMP441 I2S MEMS microphones so Frigate can raise `smoke_detector` / `fire_alarm` audio events for the smoke detectors. Each sensor is a self-contained **ESP32 node** that publishes its microphone on the network; the single Frigate at `opus` consumes the streams as audio sources. Everything is deployed from this repo. Status: the **home** node (living room) is deployed, flashed and feeding Frigate's audio detection; the **shop** node is pending hardware. Two sites — the living room at home and the workshop at the shop.
+Add INMP441 I2S MEMS microphones so Frigate can raise `smoke_detector` / `fire_alarm` audio events for the smoke detectors. Each sensor is a self-contained **ESP32 node** that publishes its microphone on the network; the single Frigate at `opus` consumes the streams as audio sources. Everything is deployed from this repo. Status: the **home** node (living room) is deployed, flashed and streaming; the **shop** node is pending hardware. **Frigate's built-in audio detection turned out not to detect our (German) smoke alarms** (see *Detection findings*), so the detection mechanism is being replaced. Two sites — the living room at home and the workshop at the shop.
 
 ## Why an ESP32 node instead of wiring the mic to the Pi
 
@@ -96,14 +96,14 @@ go2rtc on `ha-kiosk` published the mic as `rtsp://ha-kiosk:8554/mic` using an ff
 - **Reachability test:** the home node is verified reachable from this Mac (`ffplay`) *and* from `opus` — Frigate's stats report the `living_room` camera live with audio (the home node shares `opus`'s LAN, so no relay is involved).
 - **Upstream PR:** PR #35 against `rjsachse/ESP32-RTSPServer` contains the three commits. (Pushed to fork and submitted — pending upstream review.)
 
-### Phase 4 — Frigate audio detection (done; home node)
+### Phase 4 — Frigate audio plumbing (done; home node)
 
 - Refactored `frigate.cameras` (with `mqtt.host`/`user`) out of the vault into plaintext `inventory/host_vars/opus/main.yml`; the vault keeps only `vault_frigate_mqtt_password` and the nodes' passwords. Camera URLs are not secret, so a camera change no longer touches the vault.
-- The home node (`192.168.10.40`) is a Frigate camera, `living_room`: its audio arrives over RTSP (`roles: [audio]`), with a global `audio.listen: [smoke_detector, fire_alarm]` and `min_volume: 500`. Confirmed live — Frigate's stats report a low `audio_rms` (~6–11) for the quiet room.
+- The home node (`192.168.10.40`) is a Frigate camera, `living_room`: its audio arrives over RTSP (`roles: [audio]`), with a global `audio.listen: [smoke_detector, fire_alarm]` and an RMS gate (`min_volume`). Confirmed live — Frigate's stats report a low `audio_rms` (~6–11) for the quiet room.
 - `roles/frigate/templates/config.yml.j2` grew optional per-camera audio (`mic`, `audio_only`, `disarm_audio`) plus the global `audio:` block.
 - **Frigate needs a video stream for every camera** — it "always decodes a stream ... even if [object detection is] disabled", and has no video-less camera mode. So `living_room` also gets a `detect` input that is a **placeholder MJPEG**: a fixed 640×480 FuBK test card captioned "This stream is audio-only" (~1 fps) that the mic node itself serves at `http://<node>/dummy.mjpg`. `detect`/`record`/`snapshots` are off for it and `hwaccel_args` is cleared (the global QSV preset does not apply to MJPEG). go2rtc cannot restream an audio-only source (its RTSP server carries video only), which is why Frigate reads the node directly. The node credits the card's Wikimedia original (CC BY-SA 3.0) and shows it in a Video section on the status page.
 - **Shop node: pending hardware.** `werkstatt` will take its audio through the same `mic` mechanism; `disarm_audio` is already supported so the shop stream mutes with the `disarmed` profile.
-- **Tune `min_volume`** against a real alarm (the quiet-room RMS is ~6, so 500 is the gate until then).
+- **`min_volume`** is 200 (lowered from the 500 default so a real alarm horn opens the gate; ambient peaks ~45). In practice moot — the model does not detect our alarms (see *Detection findings*).
 
 ### Phase 5 — alerting (done; home + shop fire/smoke)
 
@@ -114,9 +114,31 @@ Home Assistant (on `opus`, `2026.10.1`) pushes an **emergency (critical) iOS not
 
 They are **codified**: the `homeassistant` role templates [`roles/homeassistant/templates/packages/smoke_detection.yaml.j2`](../roles/homeassistant/templates/packages/smoke_detection.yaml.j2) to `opus:/opt/homeassistant/packages/smoke_detection.yaml`, and ensures `configuration.yaml` loads the `packages/` directory, so the alerting survives an HA rebuild. (The rest of HA's `automations.yaml` — the alarm-panel logic and everything the UI manages — stays hand-managed.)
 
+**Note (2026-10-11):** these automations are wired but never fire in practice — Frigate's audio model does not detect our alarms (see *Detection findings* below); Phase 6 replaces the trigger.
+
+### Phase 6 — purpose-built smoke-alarm detector (planned)
+
+Replace Frigate's audio detection with a detector tuned to the alarms' actual acoustic signature (dominant ~3–4 kHz tone + beep pattern), publishing an event the HA automation acts on (reusing the critical-push package above). Open: **run it server-side on `opus`** (a small service reading the node's RTSP → MQTT `mic/<camera>/smoke_alarm`) **or in the node firmware** (detect on the ESP32, emit MQTT directly). Server-side is fastest to prototype and tune (no reflashing); on-node needs no server process. Decision pending — see *Open questions*.
+
+## Detection findings: Frigate's audio model does not detect our alarms
+
+Established 2026-10-11 against the home node. Frigate's built-in audio detector is a generic **AudioSet** classifier (521 classes; `/cpu_audio_model.tflite`, 2023) whose `smoke_detector`/`fire_alarm` classes were trained on (mostly US/UK) YouTube clips. German Rauchwarnmelder have **no standardised tone**: EN 14604 / DIN 14676 fix only the loudness (≥85 dB(A) at 3 m) and that the low-battery chirp differs from the alarm — the alarm waveform is manufacturer-specific (~3–4 kHz piezo, continuous or pulsed).
+
+Evidence (Frigate's `audio.living_room` debug log; `listen: [smoke_detector, fire_alarm]`, `min_volume: 200`):
+
+| Source (all sounded loudly) | Peak RMS | Model's best labels |
+| --- | --- | --- |
+| Smoke-detector test button (×2) | ~987 | `ringtone` 0.59, `telephone` 0.5, `glass` 0.5 |
+| Known Rauchmelder recording (played from a phone) | ~1015 | `jingle_bell` 0.59, `alarm` 0.5, `ringtone` 0.5 |
+| **Speech control** (someone talking at the mic) | ~795 | **`speech` 0.74–0.996** |
+
+Neither alarm source ever produced `smoke_detector` (or `fire_alarm`): the model's best guesses are generic beep classes around 0.5 — below Frigate's 0.5 floor, far below the 0.8 filter threshold. The speech control shows the mic → node → Frigate audio path is clean and the classifier works on it, so this is a **model-coverage limit, not our hardware** (and the node's 16-bit I²S read is *not* hurting us — no firmware change needed).
+
+**Consequence:** Frigate's audio detection cannot be tuned into a reliable smoke-alarm detector for our devices, so the detection mechanism is replaced by the purpose-built detector in Phase 6.
+
 ## Open questions
 
-- **`min_volume`:** tune against a real smoke/fire alarm sound (the quiet-room RMS is ~6, so 500 is the gate until then).
+- **Where to run the smoke-alarm detector** — server-side on `opus` (a service reading the RTSP stream) or in the node firmware (detect on-device, emit MQTT)? Trade-offs under Phase 6 / *Detection findings*.
 
 ## Related / out of scope
 
