@@ -22,7 +22,7 @@ An ESP32 (a few euros, Wi-Fi built in) captures the mic locally over that short 
 - **Reachability (shop): over the tailnet, via `shop`'s subnet router.** The workshop WLAN *is* the `shop-router` LAN, `192.168.1.0/24`; `shop` advertises that route and `opus` runs `--accept-routes`, so `opus` reaches a `192.168.1.x` ESP32 directly and Frigate pulls its stream with no relay on `shop`/`pascal`.
 - **Single Frigate, at `opus`.** Both sensors feed it: the living-room node as audio-only (there is no camera there), the workshop node alongside the `werkstatt` camera's audio.
 - **Frigate camera vars: refactored** (done) out of the vaulted `inventory/host_vars/opus/secrets.yml` into plaintext `inventory/host_vars/opus/main.yml`, bridging only the MQTT password and the node's RTSP/HTTP passwords from the vault. Camera URLs are not secret; this avoids editing the vault on every camera change.
-- **Detection only** for now; no alerting integration yet.
+- **Alerting: HA emergency push.** Home Assistant (on `opus`) subscribes to Frigate's audio MQTT topics and sends a **critical iOS notification** for `smoke_detector`/`fire_alarm` (see Phase 5). The shop node keeps its existing `shop-alarm` fire/smoke push.
 - **Unlock gating (shop only):** the shop stream is disabled by the same `disarmed` profile that motion already uses (Frigate profiles can override the `audio` section); `shop-alarm` already switches the profile on lock/unlock, so it needs no change. The home node listens continuously.
 - **Repo: split.** The node's firmware and its wiring diagram live in [`uhlig-it/esp32-mic-node`](https://github.com/uhlig-it/esp32-mic-node); this repo keeps the plan and the Frigate/Ansible config. A PlatformIO build, a released `.bin`, and the likelihood of patching a dormant upstream make the firmware application code — which the consolidation principle puts in its own repo (`docs/consolidation-plan.md`).
 - **Retire the Pi path.** The `i2s-mic` role's boot-config tasks and `ha-kiosk`'s go2rtc mic stream are superseded by the ESP32 node. Done: the role's Pi tasks are removed (its directory is gone — the node's firmware and diagram moved to `uhlig-it/esp32-mic-node`) and `ha-kiosk` is fully reverted — the `i2s-mic` and `go2rtc` roles are gone from its play, its mic stream removed, and the host cleaned up (overlay removed, `go2rtc` uninstalled, rebooted).
@@ -105,9 +105,40 @@ go2rtc on `ha-kiosk` published the mic as `rtsp://ha-kiosk:8554/mic` using an ff
 - **Shop node: pending hardware.** `werkstatt` will take its audio through the same `mic` mechanism; `disarm_audio` is already supported so the shop stream mutes with the `disarmed` profile.
 - **Tune `min_volume`** against a real alarm (the quiet-room RMS is ~6, so 500 is the gate until then).
 
-### Phase 5 — alerting (later)
+### Phase 5 — alerting (done; home node)
 
-Wire `shop-alarm`/HA to act on Frigate `smoke_detector`/`fire_alarm` events. Depends on the separate alerting work already noted in `docs/consolidation-plan.md`.
+Home Assistant (on `opus`, `2026.10.1`) pushes an **emergency (critical) iOS notification** when Frigate hears a smoke/fire alarm on the living-room node. The automation is triggered by Frigate's audio MQTT topics — the same mechanism as the existing `werkstatt_alarm_fire_notify` — and calls the mobile-app **service** `notify.mobile_app_iphone_15_pro_steffen`, because the newer notify *entity* action supports only `message`/`title` and so cannot carry the critical-push payload.
+
+```yaml
+- id: mic_living_room_smoke_emergency
+  alias: 'Wohnzimmer Mic: fire/smoke emergency push'
+  mode: single
+  trigger:
+  - platform: mqtt
+    topic: frigate/living_room/audio/smoke_detector
+    payload: 'ON'
+  - platform: mqtt
+    topic: frigate/living_room/audio/fire_alarm
+    payload: 'ON'
+  variables:
+    sound: "{{ trigger.topic.split('/')[-1] | replace('_', ' ') }}"
+  action:
+  - action: notify.mobile_app_iphone_15_pro_steffen
+    continue_on_error: true
+    data:
+      title: 🚨 Rauchalarm Wohnzimmer
+      message: "Frigate heard {{ sound }} in the living room.\n\nLive: https://eye.tailnet-204f.ts.net/#living_room"
+      data:
+        push:
+          sound:
+            name: default
+            critical: 1
+            volume: 1.0
+        tag: smoke-alarm
+        group: smoke-alarm
+```
+
+HA's configuration is **hand-managed** (not codified — see the known gap in `docs/consolidation-plan.md`), so this automation lives only in `opus:/opt/homeassistant/automations.yaml` and would be lost on an HA rebuild; the YAML above is the recovery path. (The shop node is already covered by the `shop-alarm` fire/smoke push.)
 
 ## Open questions
 
