@@ -17,6 +17,11 @@
     # rather than via apt.
     ffmpeg_static_url: https://johnvansickle.com/ffmpeg/releases/ffmpeg-release-amd64-static.tar.xz
   pre_tasks:
+    - name: paho-mqtt is present (the detector's MQTT client)
+      ansible.builtin.apt:
+        name: python3-paho-mqtt
+        state: present
+      tags: [python, mqtt]
     - name: ffmpeg is present
       ansible.builtin.stat:
         path: /usr/local/bin/ffmpeg
