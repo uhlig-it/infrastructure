@@ -38,11 +38,11 @@ flowchart LR
         smic[INMP441 I2S] --> sesp[ESP32-DevKitC V4<br/>RTSP audio + placeholder video]
     end
     subgraph opus [opus - NVR]
-        fg[Frigate] --> ad[audio detector]
-        ad --> mqtt[Frigate MQTT<br/>smoke_detector / fire_alarm]
+        det[purpose-built detector<br/>Goertzel tone/pattern] --> mqtt[MQTT<br/>mic/living_room/smoke_alarm]
+        mqtt --> ha[HA critical iOS push]
     end
-    hesp -->|RTSP audio, direct| fg
-    sesp -->|RTSP audio, via shop subnet router| fg
+    hesp -->|RTSP audio, direct| det
+    sesp -->|RTSP audio, via shop subnet router| det
 ```
 
 ## INMP441 wiring (ESP32-DevKitC V4)
@@ -116,9 +116,24 @@ They are **codified**: the `homeassistant` role templates [`roles/homeassistant/
 
 **Note (2026-10-11):** these automations are wired but never fire in practice — Frigate's audio model does not detect our alarms (see *Detection findings* below); Phase 6 replaces the trigger.
 
-### Phase 6 — purpose-built smoke-alarm detector (planned)
+### Phase 6 — purpose-built smoke-alarm detector (in progress; server-side prototype)
 
-Replace Frigate's audio detection with a detector tuned to the alarms' actual acoustic signature (dominant ~3–4 kHz tone + beep pattern), publishing an event the HA automation acts on (reusing the critical-push package above). Open: **run it server-side on `opus`** (a small service reading the node's RTSP → MQTT `mic/<camera>/smoke_alarm`) **or in the node firmware** (detect on the ESP32, emit MQTT directly). Server-side is fastest to prototype and tune (no reflashing); on-node needs no server process. Decision pending — see *Open questions*.
+Replace Frigate's audio detection with a detector tuned to the alarms' actual acoustic signature, publishing an event the HA automation acts on (reusing the critical-push package above). **Decided: build and tune it server-side on `opus` first** (a small service reading the node's RTSP → MQTT `mic/living_room/smoke_alarm`), **then port the same algorithm to the node firmware**; on-node detection would let the RTSP server be removed entirely. Server-side is fastest to iterate (no reflashing per threshold tweak).
+
+The `living_room` camera was dropped from Frigate so the node's single RTSP client slot is free for the detector (go2rtc cannot restream an audio-only source, so the detector pulls the node directly).
+
+**Measured acoustic signature** (a real Rauchwarnmelder, via the node's stream, 16 kHz mono, captured 2026-10-12):
+
+| Feature | Value |
+| --- | --- |
+| Tones | two **simultaneous** narrowband lines, ~3.08 kHz and ~4.92 kHz |
+| Gating | amplitude-pulsed at ~3 Hz (~0.19 s on / ~0.13 s off) → periodic broadband clicks |
+| Duration | ~6.5–8 s per button press |
+| Level | ~−57 dB (loud press) / ~−67 dB (quiet press), 20 ms frame tone power |
+
+**Validated detector** (`detect_proto.py`, pure stdlib; see *Open questions* for where this reference lives): per 20 ms frame (10 ms hop) run a Goertzel bank per band (max over 2950–3250 Hz and 4700–5150 Hz, to tolerate detector-to-detector drift) plus the frame's total power. A frame is "on" when **both** bands hold a large share of the energy (`low_ratio > 0.03` and `high_ratio > 0.02`) **and** the absolute tone power clears a −80 dB floor. A 5 s sliding window is an alarm when ≥30% of its frames are "on".
+
+Results against the reference recording: fires on both presses (~11–20 s and ~39–47 s) and nowhere else. Speech, background and silence give `on = 0%` (their band ratios stay ≤0.005 vs ~0.16/~0.08 during a press), and a single pure tone is correctly ignored — the dual-tone requirement is what separates the alarm from beeps.
 
 ## Detection findings: Frigate's audio model does not detect our alarms
 
@@ -134,11 +149,12 @@ Evidence (Frigate's `audio.living_room` debug log; `listen: [smoke_detector, fir
 
 Neither alarm source ever produced `smoke_detector` (or `fire_alarm`): the model's best guesses are generic beep classes around 0.5 — below Frigate's 0.5 floor, far below the 0.8 filter threshold. The speech control shows the mic → node → Frigate audio path is clean and the classifier works on it, so this is a **model-coverage limit, not our hardware** (and the node's 16-bit I²S read is *not* hurting us — no firmware change needed).
 
-**Consequence:** Frigate's audio detection cannot be tuned into a reliable smoke-alarm detector for our devices, so the detection mechanism is replaced by the purpose-built detector in Phase 6.
+**Consequence:** Frigate's audio detection cannot be tuned into a reliable smoke-alarm detector for our devices, so the detection mechanism is replaced by the purpose-built detector in Phase 6. (Its two tones land in exactly the band its `smoke_detector` class ignores.)
 
 ## Open questions
 
-- **Where to run the smoke-alarm detector** — server-side on `opus` (a service reading the RTSP stream) or in the node firmware (detect on-device, emit MQTT)? Trade-offs under Phase 6 / *Detection findings*.
+- **Server-side detector runtime / dependencies** — where to run the detector is now decided (server-side on `opus`); the remaining choice is how to read the node's stream. `opus` is Debian 11 with **no `ffmpeg`** (apt has 4.3.9) and Python 3.9. Options: (a) a Python detector plus `ffmpeg` (fastest, reuses the validated prototype); (b) a Go service using an RTSP library (no external binary, matches the repo's other Go services); (c) a small pure-Python RTSP/RTP client (no `ffmpeg`, tiny deps). The node streams **L16 PCM**, so no codec is needed either way — only RTP depacketisation.
+- **Where the detector reference lives** — the validated prototype is currently an untracked scratch file; once the runtime is chosen it should live in this repo (its role/files) so the algorithm is versioned and can be ported to the node.
 
 ## Related / out of scope
 
