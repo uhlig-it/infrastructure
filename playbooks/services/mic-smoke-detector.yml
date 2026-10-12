@@ -1,0 +1,70 @@
+---
+# Detects German smoke alarms (Rauchwarnmelder) on the INMP441 mic node's audio
+# and publishes mic/<room>/smoke_alarm for HA's critical push.
+#
+# The detector itself (playbooks/services/files/mic-smoke-detector.py) is the
+# validated server-side prototype; the same algorithm is later ported to the
+# node firmware. See docs/smoke-detection-plan.md, Phase 6.
+- name: Deploy the mic-node smoke-alarm detector
+  hosts: opus
+  become: true
+  gather_facts: true
+  vars:
+    detector_script: "{{ playbook_dir }}/files/mic-smoke-detector.py"
+    # The node streams L16 PCM over RTSP; ffmpeg decodes it to raw PCM for the
+    # detector. bullseye is EOL (its security archive's debs are gone), so
+    # ffmpeg is installed as a self-contained static build into /usr/local/bin
+    # rather than via apt.
+    ffmpeg_static_url: https://johnvansickle.com/ffmpeg/releases/ffmpeg-release-amd64-static.tar.xz
+  pre_tasks:
+    - name: ffmpeg is present
+      ansible.builtin.stat:
+        path: /usr/local/bin/ffmpeg
+      register: ffmpeg_bin
+      tags: [ffmpeg]
+    - name: Static ffmpeg is installed
+      when: not ffmpeg_bin.stat.exists
+      tags: [ffmpeg]
+      block:
+        - name: Static ffmpeg archive is downloaded
+          ansible.builtin.get_url:
+            url: "{{ ffmpeg_static_url }}"
+            dest: /tmp/ffmpeg-static.tar.xz
+            mode: "0644"
+        - name: Static ffmpeg archive is unpacked
+          ansible.builtin.unarchive:
+            src: /tmp/ffmpeg-static.tar.xz
+            dest: /tmp/ffmpeg-static
+            remote_src: true
+            creates: /tmp/ffmpeg-static
+        - name: Static ffmpeg binaries are installed
+          ansible.builtin.shell: >-
+            set -euo pipefail;
+            install -m 0755 /tmp/ffmpeg-static/*/ffmpeg /usr/local/bin/ffmpeg;
+            install -m 0755 /tmp/ffmpeg-static/*/ffprobe /usr/local/bin/ffprobe
+          args:
+            creates: /usr/local/bin/ffmpeg
+        - name: Static ffmpeg staging is removed
+          ansible.builtin.file:
+            path: "{{ item }}"
+            state: absent
+          loop:
+            - /tmp/ffmpeg-static
+            - /tmp/ffmpeg-static.tar.xz
+  roles:
+    - role: uhlig-it.simple_systemd_service
+      become: true
+      vars:
+        program:
+          name: mic-smoke-detector
+          description: Detect smoke alarms on the INMP441 mic node's audio
+          binary: "{{ detector_script }}"
+          runtime_user: mic-smoke-detector
+          environment:
+            RTSP_URL: "rtsp://frigate:{{ vault_mic_rtsp_password }}@192.168.10.40:554/"
+            MQTT_HOST: "127.0.0.1"
+            MQTT_PORT: "1883"
+            MQTT_USER: "frigate"
+            MQTT_PASS: "{{ vault_frigate_mqtt_password }}"
+            MQTT_TOPIC: "mic/living_room/smoke_alarm"
+      tags: [mic, smoke, detector, mqtt, systemd, service]

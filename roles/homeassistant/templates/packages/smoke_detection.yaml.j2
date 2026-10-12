@@ -1,7 +1,9 @@
 # {{ ansible_managed }}
 #
-# Emergency smoke/fire pushes from Frigate's audio detection (the INMP441 mic
-# nodes; see docs/smoke-detection-plan.md, Phase 5). Loaded through the
+# Emergency smoke/fire pushes from the purpose-built smoke-alarm detector (the
+# INMP441 mic node's audio; see docs/smoke-detection-plan.md, Phase 5/6).
+# Frigate's own audio model does not detect our (German) alarms, so the trigger
+# is the detector's MQTT topic, not frigate/*/audio/*. Loaded through the
 # `packages:` include the role adds to configuration.yaml.
 #
 # Managed here, not in the UI: the container is restarted on deploy, so edits
@@ -13,17 +15,14 @@ automation:
     mode: single
     trigger:
       - platform: mqtt
-        topic: frigate/living_room/audio/smoke_detector
-        payload: 'ON'
-      - platform: mqtt
-        topic: frigate/living_room/audio/fire_alarm
+        topic: mic/living_room/smoke_alarm
         payload: 'ON'
     action:
       - action: {{ homeassistant_smoke_notify_service }}
         continue_on_error: true
         data:
           title: 🚨 Rauchalarm Wohnzimmer
-          message: "Frigate detected a smoke or fire alarm sound in the living room.\n\nLive: https://eye.tailnet-204f.ts.net/#living_room"
+          message: "The mic-node detector heard a smoke alarm in the living room."
           data:
             push:
               sound:
