@@ -114,13 +114,15 @@ Home Assistant (on `opus`, `2026.10.1`) pushes an **emergency (critical) iOS not
 
 They are **codified**: the `homeassistant` role templates [`roles/homeassistant/templates/packages/smoke_detection.yaml.j2`](../roles/homeassistant/templates/packages/smoke_detection.yaml.j2) to `opus:/opt/homeassistant/packages/smoke_detection.yaml`, and ensures `configuration.yaml` loads the `packages/` directory, so the alerting survives an HA rebuild. (The rest of HA's `automations.yaml` — the alarm-panel logic and everything the UI manages — stays hand-managed.)
 
-**Note (2026-10-11):** these automations are wired but never fire in practice — Frigate's audio model does not detect our alarms (see *Detection findings* below); Phase 6 replaces the trigger.
+**Note (2026-10-12):** the living-room trigger is now the purpose-built detector's MQTT topic (see Phase 6) and fires in practice — a test-button press produced the critical push. The `werkstatt_*` automation still listens on `frigate/werkstatt/audio/*`, which Frigate's model never fires; it moves to the detector's topic once the shop node is deployed.
 
-### Phase 6 — purpose-built smoke-alarm detector (in progress; server-side prototype)
+### Phase 6 — purpose-built smoke-alarm detector (done server-side; ESP port pending)
 
-Replace Frigate's audio detection with a detector tuned to the alarms' actual acoustic signature, publishing an event the HA automation acts on (reusing the critical-push package above). **Decided: build and tune it server-side on `opus` first** (a small service reading the node's RTSP → MQTT `mic/living_room/smoke_alarm`), **then port the same algorithm to the node firmware**; on-node detection would let the RTSP server be removed entirely. Server-side is fastest to iterate (no reflashing per threshold tweak).
+Replace Frigate's audio detection with a detector tuned to the alarms' actual acoustic signature, publishing an event the HA automation acts on (reusing the critical-push package above). **Built and tuned server-side on `opus`; the same algorithm is still to be ported to the node firmware**, after which the RTSP server can be removed entirely.
 
 The `living_room` camera was dropped from Frigate so the node's single RTSP client slot is free for the detector (go2rtc cannot restream an audio-only source, so the detector pulls the node directly).
+
+**Deployed (2026-10-12):** `playbooks/services/mic-smoke-detector.yml` runs `playbooks/services/files/mic-smoke-detector.py` on `opus` as a hardened systemd service (`uhlig-it.simple_systemd_service`, user `mic-smoke-detector`). `ffmpeg` decodes the node's RTSP (L16 PCM) and pipes raw audio to the detector, which publishes `mic/living_room/smoke_alarm` (`ON`/`OFF`, retained, with an `OFF` last-will) to the local broker. bullseye is EOL — its security archive's debs are gone — so the playbook installs a self-contained static `ffmpeg` into `/usr/local/bin` rather than via apt.
 
 **Measured acoustic signature** (a real Rauchwarnmelder, via the node's stream, 16 kHz mono, captured 2026-10-12):
 
@@ -131,9 +133,11 @@ The `living_room` camera was dropped from Frigate so the node's single RTSP clie
 | Duration | ~6.5–8 s per button press |
 | Level | ~−57 dB (loud press) / ~−67 dB (quiet press), 20 ms frame tone power |
 
-**Validated detector** (`detect_proto.py`, pure stdlib; see *Open questions* for where this reference lives): per 20 ms frame (10 ms hop) run a Goertzel bank per band (max over 2950–3250 Hz and 4700–5150 Hz, to tolerate detector-to-detector drift) plus the frame's total power. A frame is "on" when **both** bands hold a large share of the energy (`low_ratio > 0.03` and `high_ratio > 0.02`) **and** the absolute tone power clears a −80 dB floor. A 5 s sliding window is an alarm when ≥30% of its frames are "on".
+**Detector** (`playbooks/services/files/mic-smoke-detector.py`, pure stdlib apart from `paho-mqtt`): per 20 ms frame (10 ms hop) run a Goertzel bank per band (max over 2950–3250 Hz and 4700–5150 Hz, to tolerate detector-to-detector drift) plus the frame's total power. A frame is "on" when **both** bands hold a large share of the energy (`low_ratio > 0.03` and `high_ratio > 0.02`) **and** the absolute tone power clears a −80 dB floor. A 5 s sliding window is an alarm when ≥30% of its frames are "on".
 
 Results against the reference recording: fires on both presses (~11–20 s and ~39–47 s) and nowhere else. Speech, background and silence give `on = 0%` (their band ratios stay ≤0.005 vs ~0.16/~0.08 during a press), and a single pure tone is correctly ignored — the dual-tone requirement is what separates the alarm from beeps.
+
+**Live verification (2026-10-12):** against the deployed node, three test-button presses each drove the window "on" fraction to 84–86% (threshold 30%) for ~8 s, with **no false positives** across 150 s of living-room audio (quiet seconds at 0%). A press delivered the critical iOS push end-to-end.
 
 ## Detection findings: Frigate's audio model does not detect our alarms
 
@@ -153,8 +157,8 @@ Neither alarm source ever produced `smoke_detector` (or `fire_alarm`): the model
 
 ## Open questions
 
-- **Server-side detector runtime / dependencies** — where to run the detector is now decided (server-side on `opus`); the remaining choice is how to read the node's stream. `opus` is Debian 11 with **no `ffmpeg`** (apt has 4.3.9) and Python 3.9. Options: (a) a Python detector plus `ffmpeg` (fastest, reuses the validated prototype); (b) a Go service using an RTSP library (no external binary, matches the repo's other Go services); (c) a small pure-Python RTSP/RTP client (no `ffmpeg`, tiny deps). The node streams **L16 PCM**, so no codec is needed either way — only RTP depacketisation.
-- **Where the detector reference lives** — the validated prototype is currently an untracked scratch file; once the runtime is chosen it should live in this repo (its role/files) so the algorithm is versioned and can be ported to the node.
+- **Port the detector to the node firmware** — the server-side service on `opus` is a stepping stone; detecting on the ESP32 would let the RTSP server (and the `opus` service) be removed. The tone/pattern algorithm is language-agnostic and already validated.
+- **Dedicated MQTT user** — the detector currently publishes with the shared `frigate` broker user; give it its own `mosquitto_users` entry.
 
 ## Related / out of scope
 
