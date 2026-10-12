@@ -124,6 +124,8 @@ The `living_room` camera was dropped from Frigate so the node's single RTSP clie
 
 **Deployed (2026-10-12):** `playbooks/services/mic-smoke-detector.yml` runs `playbooks/services/files/mic-smoke-detector.py` on `opus` as a hardened systemd service (`uhlig-it.simple_systemd_service`, user `mic-smoke-detector`). `ffmpeg` decodes the node's RTSP (L16 PCM) and pipes raw audio to the detector, which publishes `mic/living_room/smoke_alarm` (`ON`/`OFF`, retained, with an `OFF` last-will) to the local broker. bullseye is EOL — its security archive's debs are gone — so the playbook installs a self-contained static `ffmpeg` into `/usr/local/bin` rather than via apt.
 
+The detector's acoustic parameters are **not in the code**: they come from a named profile in [`playbooks/services/files/mic-smoke-detector-profiles.json`](../playbooks/services/files/mic-smoke-detector-profiles.json) (selected by `DETECTOR_PROFILE`; `smoke_home_v1` today). A different detector type — or a replacement unit — is therefore a new profile, tuned by the analysis tool, rather than a code change.
+
 **Measured acoustic signature** (a real Rauchwarnmelder, via the node's stream, 16 kHz mono, captured 2026-10-12):
 
 | Feature | Value |
@@ -138,6 +140,27 @@ The `living_room` camera was dropped from Frigate so the node's single RTSP clie
 Results against the reference recording: fires on both presses (~11–20 s and ~39–47 s) and nowhere else. Speech, background and silence give `on = 0%` (their band ratios stay ≤0.005 vs ~0.16/~0.08 during a press), and a single pure tone is correctly ignored — the dual-tone requirement is what separates the alarm from beeps.
 
 **Live verification (2026-10-12):** against the deployed node, three test-button presses each drove the window "on" fraction to 84–86% (threshold 30%) for ~8 s, with **no false positives** across 150 s of living-room audio (quiet seconds at 0%). A press delivered the critical iOS push end-to-end.
+
+**Recalibrating for a new detector** (a different type, or a replacement unit). The parameters are data, so this is a capture plus one command — roughly a two-yearly chore:
+
+1. **Capture** ~2–3 minutes with 2–3 presses of ~10 s each, in a quiet room. The service holds the node's only RTSP client, so stop it first (and point the tool at the raw URL if capturing directly):
+
+```sh
+ssh opus 'sudo systemctl stop mic-smoke-detector'
+ssh opus 'ffmpeg -rtsp_transport tcp -i rtsp://frigate:PASSWORD@192.168.10.40:554/ -t 180 -y /tmp/det.wav'
+ssh opus 'sudo systemctl start mic-smoke-detector'
+scp opus:/tmp/det.wav /tmp/
+```
+
+2. **Analyse** on the controller. `playbooks/services/files/analyze-recording.py` finds the press regions, the tone peaks, and each band's level and gate rate; it keeps only bands that are both tonal and gated (which drops hum and speech), prints a ready-to-paste profile, and evaluates it — and, with `--profile`, the existing one — against the recording:
+
+```sh
+python3 playbooks/services/files/analyze-recording.py /tmp/det.wav --profile smoke_home_v1
+```
+
+3. **Adopt** the suggested profile: paste it into the profiles file under a new name (e.g. `smoke_shop_v1`), point `DETECTOR_PROFILE` at it in the playbook, and redeploy. Confirm with a live press.
+
+The tool's regression check is built in: run on the home recording it reproduces the `smoke_home_v1` outcome (both presses detected, no false positives).
 
 ## Detection findings: Frigate's audio model does not detect our alarms
 
@@ -157,7 +180,8 @@ Neither alarm source ever produced `smoke_detector` (or `fire_alarm`): the model
 
 ## Open questions
 
-- **Port the detector to the node firmware** — the server-side service on `opus` is a stepping stone; detecting on the ESP32 would let the RTSP server (and the `opus` service) be removed. The tone/pattern algorithm is language-agnostic and already validated.
+- **Port the detector to the node firmware** — the server-side service on `opus` is a stepping stone; detecting on the ESP32 would let the RTSP server (and the `opus` service) be removed. The tone/pattern algorithm and the profile format are language-agnostic and already validated.
+- **Workshop detector profile** — the two workshop detectors are a different type. Once the shop node is deployed, run the recalibration runbook to add a `smoke_shop_v1` profile, and generalise the `opus` service to a list of inputs (URL, topic, profile per site) so home and shop coexist.
 - **Dedicated MQTT user** — the detector currently publishes with the shared `frigate` broker user; give it its own `mosquitto_users` entry.
 
 ## Related / out of scope

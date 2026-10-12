@@ -1,0 +1,13 @@
+{
+  "smoke_home_v1": {
+    "description": "Rauchwarnmelder at home (living room): two simultaneous tones ~3.1 and ~4.9 kHz, amplitude-gated at ~3 Hz. Measured 2026-10-12.",
+    "bands_hz": [[2950, 3250], [4700, 5150]],
+    "band_step_hz": 50,
+    "ratio_min": [0.03, 0.02],
+    "require": "all",
+    "tone_floor_db": -80,
+    "window_s": 5.0,
+    "on_fraction_min": 0.30,
+    "clear_hold_s": 2.0
+  }
+}
