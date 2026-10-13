@@ -33,8 +33,6 @@
       FRIGATE_API_URL: "{{ alarm_core_frigate_api_url }}"
       FRIGATE_API_USER: "{{ alarm_core_frigate_api_user }}"
       FRIGATE_API_PASSWORD: "{{ alarm_core_frigate_api_password }}"
-      NTFY_URL: "{{ alarm_core_ntfy_url }}"
-      LIVE_STREAM_URL: "{{ alarm_core_live_stream_url }}"
     volumes:
       - /opt/shop-alarm/state:/var/lib/shop-alarm
   tags: [ docker, shop-alarm, container ]

@@ -14,7 +14,3 @@ alarm_core_health_addr: ":9101"
 alarm_core_frigate_api_url: "http://localhost:5000"
 alarm_core_frigate_api_user: ""
 alarm_core_frigate_api_password: ""
-# Backup channel; topic is set ad hoc (same convention as shop-health.sh).
-alarm_core_ntfy_url: "https://ntfy.sh/shop-alarm-e4ae8009-c460-48c5-aeed-8414efb0ac3d"
-# Link appended to notifications (Frigate UI / HA deep link).
-alarm_core_live_stream_url: "http://shop:8888/cam/"
