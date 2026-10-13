@@ -1,11 +1,12 @@
 ---
-# Detects German smoke alarms (Rauchwarnmelder) on the INMP441 mic node's audio
+# Detects German smoke alarms (Rauchwarnmelder) on the INMP441 mic nodes' audio
 # and publishes mic/<room>/smoke_alarm for HA's critical push.
 #
 # The detector (playbooks/services/files/mic-smoke-detector.py) reads its
-# acoustic parameters from a named profile in mic-smoke-detector-profiles.json;
-# a different detector type is a new profile, tuned with analyze-recording.py.
-# The same algorithm is later ported to the node firmware. See
+# acoustic parameters from a named profile (mic-smoke-detector-profiles.json)
+# and its list of nodes from mic-smoke-detector-inputs.json; a different
+# detector type is a new profile, tuned with analyze-recording.py. The same
+# algorithm is later ported to the node firmware. See
 # docs/smoke-detection-plan.md, Phase 6.
 - name: Deploy the mic-node smoke-alarm detector
   hosts: opus
@@ -14,6 +15,14 @@
   vars:
     detector_script: "{{ playbook_dir }}/files/mic-smoke-detector.py"
     detector_profiles: "{{ playbook_dir }}/files/mic-smoke-detector-profiles.json"
+    # One entry per mic node. The RTSP credential is NOT here (this file is
+    # plaintext) - it comes from MIC_RTSP_USER/MIC_RTSP_PASSWORD. Add the shop
+    # node (profile smoke_shop_v1) once its hardware exists.
+    detector_inputs:
+      - name: living_room
+        host: 192.168.10.40
+        profile: smoke_home_v1
+        topic: mic/living_room/smoke_alarm
     # The node streams L16 PCM over RTSP; ffmpeg decodes it to raw PCM for the
     # detector. bullseye is EOL (its security archive's debs are gone), so
     # ffmpeg is installed as a self-contained static build into /usr/local/bin
@@ -26,6 +35,13 @@
         dest: /etc/mic-smoke-detector-profiles.json
         mode: "0644"
       register: profiles_copied
+      tags: [profile]
+    - name: Detector inputs are present
+      ansible.builtin.copy:
+        content: "{{ detector_inputs | to_nice_json }}\n"
+        dest: /etc/mic-smoke-detector-inputs.json
+        mode: "0644"
+      register: inputs_copied
       tags: [profile]
     - name: paho-mqtt is present (the detector's MQTT client)
       ansible.builtin.apt:
@@ -76,19 +92,19 @@
           binary: "{{ detector_script }}"
           runtime_user: mic-smoke-detector
           environment:
-            RTSP_URL: "rtsp://frigate:{{ vault_mic_rtsp_password }}@192.168.10.40:554/"
-            DETECTOR_PROFILE: "smoke_home_v1"
+            DETECTOR_INPUTS: "/etc/mic-smoke-detector-inputs.json"
             DETECTOR_PROFILES: "/etc/mic-smoke-detector-profiles.json"
+            MIC_RTSP_USER: "frigate"
+            MIC_RTSP_PASSWORD: "{{ vault_mic_rtsp_password }}"
             MQTT_HOST: "127.0.0.1"
             MQTT_PORT: "1883"
             MQTT_USER: "frigate"
             MQTT_PASS: "{{ vault_frigate_mqtt_password }}"
-            MQTT_TOPIC: "mic/living_room/smoke_alarm"
       tags: [mic, smoke, detector, mqtt, systemd, service]
   tasks:
-    - name: Detector is restarted when its profiles change
+    - name: Detector is restarted when its profiles or inputs change
       ansible.builtin.systemd:
         name: mic-smoke-detector.service
         state: restarted
-      when: profiles_copied.changed
+      when: profiles_copied.changed or inputs_copied.changed
       tags: [profile, service]
