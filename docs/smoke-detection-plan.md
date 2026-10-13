@@ -116,9 +116,11 @@ They are **codified**: the `homeassistant` role templates [`roles/homeassistant/
 
 **Note (2026-10-13):** both automations now trigger on the detector's topics — `mic/living_room/smoke_alarm` (fires in practice; a test-button press produced the critical push) and `mic/werkstatt/smoke_alarm` (ready; fires once the shop node is deployed). The old `frigate/<camera>/audio/*` triggers are gone.
 
-### Phase 6 — purpose-built smoke-alarm detector (done server-side; ESP port pending)
+### Phase 6 — purpose-built smoke-alarm detector (done server-side; on-device built)
 
-Replace Frigate's audio detection with a detector tuned to the alarms' actual acoustic signature, publishing an event the HA automation acts on (reusing the critical-push package above). **Built and tuned server-side on `opus`; the same algorithm is still to be ported to the node firmware**, after which the RTSP server can be removed entirely.
+Replace Frigate's audio detection with a detector tuned to the alarms' actual acoustic signature, publishing an event the HA automation acts on (reusing the critical-push package above). **Built and tuned server-side on `opus`; ported to the node firmware** (2026-10-13), after which the RTSP server can be removed entirely.
+
+**On-device port (built 2026-10-13, flash pending):** the detector is ported into [`uhlig-it/esp32-mic-node`](https://github.com/uhlig-it/esp32-mic-node) so the ESP32 raises the alarm itself and publishes `mic/<room>/smoke_alarm` (retained `ON`/`OFF`, `OFF` last-will) — no server process, and the RTSP server can eventually go. The profile is a per-site build-time constant (`src/site.h`): home = two-tone `smoke_home_v1`, shop = single-tone `smoke_shop_v1`. The I²S read is now continuous (it used to gate on an attached RTSP client, which would stop detection whenever nobody streamed). The ported C++ detector (`src/detector.h`) reproduces the Python detector on the recordings — Rauchmelder peak 1.000, oven beep 0.003 (no alarm), and the 193 s reference fires on both presses. Rollout is a **dual-run**: the server-side detector was moved to `mic/living_room/smoke_alarm_opus` while the node owns the real topic, to be retired once the on-device one is proven.
 
 The `living_room` camera was dropped from Frigate so the node's single RTSP client slot is free for the detector (go2rtc cannot restream an audio-only source, so the detector pulls the node directly).
 

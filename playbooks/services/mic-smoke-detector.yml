@@ -22,7 +22,10 @@
       - name: living_room
         host: 192.168.10.40
         profile: smoke_home_v1
-        topic: mic/living_room/smoke_alarm
+        # TEMPORARY during the on-device migration: the node now owns
+        # mic/living_room/smoke_alarm, so the server-side detector publishes to
+        # a parallel topic for a few days of A/B comparison, then retires.
+        topic: mic/living_room/smoke_alarm_opus
     # The node streams L16 PCM over RTSP; ffmpeg decodes it to raw PCM for the
     # detector. bullseye is EOL (its security archive's debs are gone), so
     # ffmpeg is installed as a self-contained static build into /usr/local/bin
