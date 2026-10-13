@@ -37,10 +37,7 @@ automation:
     mode: single
     trigger:
       - platform: mqtt
-        topic: frigate/werkstatt/audio/fire_alarm
-        payload: 'ON'
-      - platform: mqtt
-        topic: frigate/werkstatt/audio/smoke_detector
+        topic: mic/werkstatt/smoke_alarm
         payload: 'ON'
     condition:
       - condition: not
@@ -53,7 +50,7 @@ automation:
         continue_on_error: true
         data:
           title: 🚨 Feuer/Rauch Werkstatt
-          message: "Frigate detected a smoke or fire alarm sound in the workshop.\n\nLive: https://eye.tailnet-204f.ts.net/#werkstatt"
+          message: "The mic-node detector heard a smoke alarm in the workshop."
           data:
             push:
               sound:

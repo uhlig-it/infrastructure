@@ -42,6 +42,11 @@ scrape_configs:
     static_configs:
       - targets: [ opus:9101 ]
 
+  # Mic-node smoke-alarm detector (opus:9111, unauthenticated /metrics).
+  - job_name: mic-smoke-detector
+    static_configs:
+      - targets: [ opus:9111 ]
+
   - job_name: gotosocial
     scheme: https
     basic_auth:

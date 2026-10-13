@@ -19,6 +19,7 @@ This is the server-side prototype; the same algorithm (and the same profile
 numbers) is meant to be ported to the node firmware later.
 """
 import argparse
+import http.server
 import json
 import math
 import os
@@ -39,6 +40,78 @@ DEFAULT_PROFILES = os.path.join(
     "mic-smoke-detector-profiles.json")
 
 _publishers = []
+
+
+def metric_escape(value):
+    return str(value).replace("\\", "\\\\").replace('"', '\\"')
+
+
+class Metrics:
+    """Per-input detector state, rendered as Prometheus text. The soak relies
+    on `mic_detector_on_fraction` (query max_over_time() in VictoriaMetrics to
+    see how close non-alarms get)."""
+
+    def __init__(self):
+        self.state = {}
+
+    def register(self, name, profile):
+        self.state[name] = {"profile": profile, "on_fraction": 0.0,
+                            "alarm": 0, "restarts": 0, "up": 0}
+
+    def update(self, name, **fields):
+        if name in self.state:
+            self.state[name].update(fields)
+
+    def bump(self, name, field):
+        if name in self.state:
+            self.state[name][field] += 1
+
+    def render(self):
+        out = [
+            "# HELP mic_detector_on_fraction current window 'on' fraction (0-1)",
+            "# TYPE mic_detector_on_fraction gauge",
+            "# HELP mic_detector_alarm current alarm state (0/1)",
+            "# TYPE mic_detector_alarm gauge",
+            "# HELP mic_detector_up 1 while audio is flowing for the input",
+            "# TYPE mic_detector_up gauge",
+            "# HELP mic_detector_ffmpeg_restarts_total ffmpeg (re)starts",
+            "# TYPE mic_detector_ffmpeg_restarts_total counter",
+        ]
+        for name, st in sorted(self.state.items()):
+            labels = 'input="%s",profile="%s"' % (metric_escape(name),
+                                                     metric_escape(st["profile"]))
+            out.append("mic_detector_on_fraction{%s} %s" % (labels, st["on_fraction"]))
+            out.append("mic_detector_alarm{%s} %d" % (labels, st["alarm"]))
+            out.append("mic_detector_up{%s} %d" % (labels, st["up"]))
+            out.append("mic_detector_ffmpeg_restarts_total{%s} %d" % (labels, st["restarts"]))
+        return "\n".join(out) + "\n"
+
+
+METRICS = Metrics()
+
+
+def serve_metrics(addr):
+    host, port = addr.rsplit(":", 1)
+    host = host or "0.0.0.0"
+
+    class Handler(http.server.BaseHTTPRequestHandler):
+        def do_GET(self):  # noqa: N802
+            if self.path.split("?")[0] != "/metrics":
+                self.send_error(404)
+                return
+            body = METRICS.render().encode()
+            self.send_response(200)
+            self.send_header("Content-Type", "text/plain; version=0.0.4")
+            self.send_header("Content-Length", str(len(body)))
+            self.end_headers()
+            self.wfile.write(body)
+
+        def log_message(self, *_args):  # quiet
+            pass
+
+    server = http.server.ThreadingHTTPServer((host, int(port)), Handler)
+    threading.Thread(target=server.serve_forever, daemon=True).start()
+    log("metrics on http://%s:%s/metrics" % (host, port))
 
 
 def goertzel_power(samples, f, sr=SR):
@@ -140,6 +213,7 @@ def run_input(inp, profile, publisher, verbose=False):
     alarm = False
 
     while True:
+        METRICS.bump(tag, "restarts")
         log("[%s] starting ffmpeg: %s" % (tag, " ".join(ffmpeg_command(source))))
         proc = subprocess.Popen(ffmpeg_command(source), stdout=subprocess.PIPE)
         raw = bytearray()
@@ -155,18 +229,21 @@ def run_input(inp, profile, publisher, verbose=False):
                     flags.append(frame_is_on(win, profile))
                     del raw[:hop_bytes]
                     frac = sum(flags) / len(flags)
+                    METRICS.update(tag, on_fraction=round(frac, 4), up=1)
                     if frac >= min_on:
                         since_clear = 0
                         if not alarm:
                             log("[%s] ALARM on (window %.0f%% on)" % (tag, 100 * frac))
                             publisher.publish("ON")
                             alarm = True
+                            METRICS.update(tag, alarm=1)
                     else:
                         since_clear += 1
                         if alarm and since_clear >= clear_frames:
                             log("[%s] alarm cleared" % tag)
                             publisher.publish("OFF")
                             alarm = False
+                            METRICS.update(tag, alarm=0)
                     if verbose:
                         sys.stderr.write("[%s] on=%.0f%%\n" % (tag, 100 * frac))
         except Exception as exc:  # noqa: BLE001 - keep the service alive
@@ -177,6 +254,7 @@ def run_input(inp, profile, publisher, verbose=False):
                 proc.wait(timeout=5)
             except subprocess.TimeoutExpired:
                 proc.kill()
+            METRICS.update(tag, up=0)
         if not source.startswith(("rtsp://", "rtsps://")):
             log("[%s] input exhausted" % tag)
             return
@@ -232,12 +310,17 @@ def main():
                     default=int(os.environ.get("MQTT_PORT", "1883")))
     ap.add_argument("--mqtt-user", default=os.environ.get("MQTT_USER"))
     ap.add_argument("--mqtt-pass", default=os.environ.get("MQTT_PASS"))
+    ap.add_argument("--metrics-addr", default=os.environ.get("METRICS_ADDR"),
+                    help="host:port to serve /metrics on (default: $METRICS_ADDR)")
     ap.add_argument("--no-mqtt", action="store_true")
     ap.add_argument("--verbose", action="store_true")
     args = ap.parse_args()
 
     inputs = build_inputs(args)
     profiles = load_profiles(args.profiles)
+
+    if args.metrics_addr:
+        serve_metrics(args.metrics_addr)
 
     threads = []
     for inp in inputs:
@@ -246,6 +329,7 @@ def main():
                 % (inp["name"], inp["profile"], args.profiles))
             continue
         profile = prepare(profiles[inp["profile"]], inp["profile"])
+        METRICS.register(inp["name"], inp["profile"])
         publisher = Publisher(args.mqtt_host, args.mqtt_port, args.mqtt_user,
                               args.mqtt_pass, inp["topic"], enabled=not args.no_mqtt)
         _publishers.append(publisher)

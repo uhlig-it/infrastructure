@@ -114,7 +114,7 @@ Home Assistant (on `opus`, `2026.10.1`) pushes an **emergency (critical) iOS not
 
 They are **codified**: the `homeassistant` role templates [`roles/homeassistant/templates/packages/smoke_detection.yaml.j2`](../roles/homeassistant/templates/packages/smoke_detection.yaml.j2) to `opus:/opt/homeassistant/packages/smoke_detection.yaml`, and ensures `configuration.yaml` loads the `packages/` directory, so the alerting survives an HA rebuild. (The rest of HA's `automations.yaml` — the alarm-panel logic and everything the UI manages — stays hand-managed.)
 
-**Note (2026-10-12):** the living-room trigger is now the purpose-built detector's MQTT topic (see Phase 6) and fires in practice — a test-button press produced the critical push. The `werkstatt_*` automation still listens on `frigate/werkstatt/audio/*`, which Frigate's model never fires; it moves to the detector's topic once the shop node is deployed.
+**Note (2026-10-13):** both automations now trigger on the detector's topics — `mic/living_room/smoke_alarm` (fires in practice; a test-button press produced the critical push) and `mic/werkstatt/smoke_alarm` (ready; fires once the shop node is deployed). The old `frigate/<camera>/audio/*` triggers are gone.
 
 ### Phase 6 — purpose-built smoke-alarm detector (done server-side; ESP port pending)
 
@@ -125,6 +125,8 @@ The `living_room` camera was dropped from Frigate so the node's single RTSP clie
 **Deployed (2026-10-12):** `playbooks/services/mic-smoke-detector.yml` runs `playbooks/services/files/mic-smoke-detector.py` on `opus` as a hardened systemd service (`uhlig-it.simple_systemd_service`, user `mic-smoke-detector`). `ffmpeg` decodes the node's RTSP (L16 PCM) and pipes raw audio to the detector, which publishes `mic/living_room/smoke_alarm` (`ON`/`OFF`, retained, with an `OFF` last-will) to the local broker. bullseye is EOL — its security archive's debs are gone — so the playbook installs a self-contained static `ffmpeg` into `/usr/local/bin` rather than via apt.
 
 The detector's acoustic parameters are **not in the code**: they come from a named profile in [`playbooks/services/files/mic-smoke-detector-profiles.json`](../playbooks/services/files/mic-smoke-detector-profiles.json) (`smoke_home_v1`, `smoke_shop_v1`). A different detector type — or a replacement unit — is therefore a new profile, tuned by the analysis tool, rather than a code change. The nodes it watches are listed in `mic-smoke-detector-inputs.json` (rendered by the playbook from `detector_inputs`), one entry per node with its own profile and MQTT topic; the service runs one ffmpeg+detector thread per entry, so home and shop coexist. The RTSP credential stays in the role's 0640 environment file, not the plaintext inputs file.
+
+**Observability / soak (2026-10-13):** the service serves Prometheus metrics on `opus:9111` (`mic_detector_on_fraction`, `mic_detector_alarm`, `mic_detector_up`, `mic_detector_ffmpeg_restarts_total`), scraped by VictoriaMetrics (`mic-smoke-detector` job). The point is to soak the home detector against real life: `max_over_time(mic_detector_on_fraction[1h])` shows how close non-alarms (TV, music, the fridge, speech) come, so the thresholds can be confirmed before they are baked into the firmware. It publishes with a dedicated `mic-detector` broker user rather than the shared `frigate` one.
 
 **Measured acoustic signature** (a real Rauchwarnmelder, via the node's stream, 16 kHz mono, captured 2026-10-12):
 
@@ -184,7 +186,6 @@ Neither alarm source ever produced `smoke_detector` (or `fire_alarm`): the model
 
 - **Port the detector to the node firmware** — the server-side service on `opus` is a stepping stone; detecting on the ESP32 would let the RTSP server (and the `opus` service) be removed. The tone/pattern algorithm and the profile format are language-agnostic and already validated.
 - **Deploy the shop node** (the prerequisite for the shop to alert at all) — the INMP441 hardware, wiring, and the `shop-router` DHCP reservation are pending. Then add a `werkstatt` entry to `detector_inputs` (profile `smoke_shop_v1`, topic `mic/werkstatt/smoke_alarm`) and confirm or retune the profile against the real node — its levels are provisional, from a phone recording.
-- **Dedicated MQTT user** — the detector currently publishes with the shared `frigate` broker user; give it its own `mosquitto_users` entry.
 
 ## Related / out of scope
 
