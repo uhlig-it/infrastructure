@@ -165,10 +165,13 @@ class Clipper:
             if kind == "alarm" and self.rec_kind != "alarm":
                 self.rec_kind = "alarm"
             return
-        if self.since_end >= self.cooldown_frames:
-            self.rec = bytearray(self.ring)
-            self.rec_kind = kind
-            log("[%s] capturing a %r clip" % (self.name, kind))
+        # An explicit manual trigger is never dropped; auto triggers respect
+        # the cooldown so a noisy spell cannot write clips back to back.
+        if kind != "manual" and self.since_end < self.cooldown_frames:
+            return
+        self.rec = bytearray(self.ring)
+        self.rec_kind = kind
+        log("[%s] capturing a %r clip" % (self.name, kind))
 
     def _finish(self):
         stamp = time.strftime("%Y%m%dT%H%M%SZ", time.gmtime())
