@@ -9,5 +9,16 @@
     "window_s": 5.0,
     "on_fraction_min": 0.30,
     "clear_hold_s": 2.0
+  },
+  "smoke_shop_v1": {
+    "description": "Rauchwarnmelder in the workshop: a single strong tone ~3.03-3.13 kHz, amplitude-gated at ~2.2-2.7 Hz. From iPhone recordings 2026-10-13; the ratios/levels are provisional (the phone AGC inflates them) - confirm against the shop node once it exists.",
+    "bands_hz": [[2950, 3350]],
+    "band_step_hz": 50,
+    "ratio_min": [0.08],
+    "require": "any",
+    "tone_floor_db": -80,
+    "window_s": 4.5,
+    "on_fraction_min": 0.30,
+    "clear_hold_s": 2.0
   }
 }

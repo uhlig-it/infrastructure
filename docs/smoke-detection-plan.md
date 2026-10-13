@@ -141,6 +141,8 @@ Results against the reference recording: fires on both presses (~11–20 s and ~
 
 **Live verification (2026-10-12):** against the deployed node, three test-button presses each drove the window "on" fraction to 84–86% (threshold 30%) for ~8 s, with **no false positives** across 150 s of living-room audio (quiet seconds at 0%). A press delivered the critical iOS push end-to-end.
 
+**Workshop detectors (iPhone recordings, 2026-10-13):** the two workshop units are a **different type** from home — each is a **single** strong tone (measured ~3.03 and ~3.13 kHz), amplitude-gated at ~2.2–2.7 Hz. The home profile therefore does **not** see them: it requires two bands and only the low one is present, so `smoke_home_v1` yields no detection on either recording. A single-band profile, `smoke_shop_v1` (`bands_hz [[2950, 3350]]`, `ratio_min 0.08`, `require: any`), detects both recordings at a 100% window on-fraction. Caveats: the levels come from a phone recording whose AGC inflates them, so `smoke_shop_v1`'s thresholds are provisional until confirmed against the shop node; and a single-tone rule is inherently less specific than the home two-tone rule, so a sustained ~3 kHz tone from something else could false-trigger.
+
 **Recalibrating for a new detector** (a different type, or a replacement unit). The parameters are data, so this is a capture plus one command — roughly a two-yearly chore:
 
 1. **Capture** ~2–3 minutes with 2–3 presses of ~10 s each, in a quiet room. The service holds the node's only RTSP client, so stop it first (and point the tool at the raw URL if capturing directly):
@@ -181,7 +183,7 @@ Neither alarm source ever produced `smoke_detector` (or `fire_alarm`): the model
 ## Open questions
 
 - **Port the detector to the node firmware** — the server-side service on `opus` is a stepping stone; detecting on the ESP32 would let the RTSP server (and the `opus` service) be removed. The tone/pattern algorithm and the profile format are language-agnostic and already validated.
-- **Workshop detector profile** — the two workshop detectors are a different type. Once the shop node is deployed, run the recalibration runbook to add a `smoke_shop_v1` profile, and generalise the `opus` service to a list of inputs (URL, topic, profile per site) so home and shop coexist.
+- **Workshop detector profile** — `smoke_shop_v1` exists from the iPhone recordings, but the shop node is pending hardware: confirm (or retune) its thresholds against the shop node, and generalise the `opus` service to a list of inputs (URL, topic, profile per site) so home and shop coexist.
 - **Dedicated MQTT user** — the detector currently publishes with the shared `frigate` broker user; give it its own `mosquitto_users` entry.
 
 ## Related / out of scope

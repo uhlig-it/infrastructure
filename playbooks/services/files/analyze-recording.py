@@ -37,8 +37,9 @@ HOP = 160              # 10 ms
 FFT_N = 1024           # 64 ms, Hann-windowed, for tone peak finding
 GRID_LO, GRID_HI = 300, 6000
 FWHM = 175             # suggested band half-width (Hz)
-MIN_LEVEL = 0.03       # a tone must hold >=3% of the frame energy
+MIN_LEVEL = 0.03       # a gated tone must hold >=3% of the frame energy
 MIN_GATE_HZ = 1.5      # and be gated at least this fast
+STRONG_LEVEL = 0.20    # ... or hold this much continuously (a steady tone)
 
 
 # --- spectrum ---------------------------------------------------------------
@@ -144,8 +145,9 @@ def segment(samples):
     per-frame power list."""
     powers = [sum(v * v for v in win) / len(win) for _, win in frames(samples)]
     if not powers:
-        return [], powers
+        return [], powers, []
     floor = percentile(powers, 0.20) * 10.0 ** (10.0 / 10.0)
+    active = [p > floor for p in powers]
     regions, start, gap = [], None, 0
     for i, p in enumerate(powers):
         if p > floor:
@@ -158,7 +160,7 @@ def segment(samples):
                 start = None
     if start is not None:
         regions.append([start * HOP / SR, len(powers) * HOP / SR])
-    return [r for r in regions if r[1] - r[0] >= 1.5], powers
+    return [r for r in regions if r[1] - r[0] >= 1.5], powers, active
 
 
 def region_power(powers, region):
@@ -204,21 +206,26 @@ def band_for(freq):
 
 
 def band_stats(samples, band_range, region, step=50):
-    """Return (level, gate_hz) for a band (a [lo, hi] range) inside a region:
+    """Return (level, gate_hz) for a band (a [lo, hi] range) inside a region.
     'level' is the median share of the frame energy while the band sounds
-    (ignoring the gated off-gaps); 'gate_hz' is the rising-edge rate of that
-    presence."""
+    (used for the ratio threshold); 'gate_hz' is the on/off rate of the band's
+    amplitude envelope - measured on the amplitude, not the ratio, because a
+    recording whose gaps keep a residual tone (e.g. an AGC'd phone recording)
+    still gates in amplitude while its ratio barely moves."""
     band = list(range(int(band_range[0]), int(band_range[1]) + 1, step))
     sub = samples[int(region[0] * SR):int(region[1] * SR)]
-    ratios = []
+    band_powers, ratios = [], []
     for _, win in frames(sub):
         powers, tot = frame_ratios(win, [band])
+        band_powers.append(powers[0])
         ratios.append(powers[0] / (tot + 1e-30))
     present = [r for r in ratios if r > 0.01]
     level = percentile(present, 0.5) if present else 0.0
+    peak = percentile(band_powers, 0.9) if band_powers else 0.0
+    thr = 0.25 * peak
     edges, prev = 0, False
-    for r in ratios:
-        on = r > 0.4 * level
+    for p in band_powers:
+        on = p > thr
         edges += 1 if (on and not prev) else 0
         prev = on
     dur = max(0.001, region[1] - region[0])
@@ -285,7 +292,7 @@ def main():
     samples = read_samples(args.recording)
     print("recording: %.1f s, %d Hz mono" % (len(samples) / SR, SR))
 
-    regions, powers = segment(samples)
+    regions, powers, active = segment(samples)
     print("press regions: %s"
           % (", ".join("%.1f-%.1f" % (a, b) for a, b in regions) or "(none)"))
     if not regions:
@@ -294,10 +301,10 @@ def main():
     loudest = max(regions, key=lambda r: region_power(powers, r))
     print("loudest region (analysed): %.1f-%.1f s" % (loudest[0], loudest[1]))
 
-    # Press spectrum from inside the loudest region; background from the quiet
-    # half of the recording.
-    order = sorted(range(len(powers)), key=lambda i: powers[i])
-    quiet_idx = [i * HOP for i in order[:len(order) // 2]]
+    # Press spectrum from inside the loudest region; background spectrum from
+    # the frames the segmentation calls inactive (so a long, continuous press
+    # does not contaminate the background with its own tone).
+    quiet_idx = [i * HOP for i, a in enumerate(active) if not a][::3]
     loud_idx = [int(t * SR) for t in
                 [loudest[0] + 0.05 * k for k in
                  range(int((loudest[1] - loudest[0]) / 0.05))]]
@@ -308,15 +315,21 @@ def main():
     print("tone peaks: %s"
           % (", ".join("%.0f Hz" % p["freq"] for p in peaks) or "(none)"))
 
-    # Keep only the peaks that are tonal AND gated - the alarm's signature.
+    # Keep only the peaks that are tonal AND (gated - the pulsed alarm's
+    # signature - or continuously strong, which is how a steady-tone detector
+    # looks). Both are far above what hum or speech reach.
     keep = []
     print("candidate bands (level = share of frame energy, gate = on/off rate):")
     for peak in peaks:
         band = band_for(peak["freq"])
         level, gate = band_stats(samples, band, loudest)
-        ok = level >= MIN_LEVEL and gate >= MIN_GATE_HZ
+        gated = level >= MIN_LEVEL and gate >= MIN_GATE_HZ
+        steady = level >= STRONG_LEVEL
+        ok = gated or steady
         print("  %4.0f-%.0f Hz  level=%.3f  gate=%.1f Hz  %s"
-              % (band[0], band[1], level, gate, "keep" if ok else "drop"))
+              % (band[0], band[1], level, gate,
+                 "keep" + (" (steady)" if steady and not gated else "")
+                 if ok else "drop"))
         if ok:
             keep.append((level, band))
     keep = sorted(keep, key=lambda lb: lb[1][0])[:3]
