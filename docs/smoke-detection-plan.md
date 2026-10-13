@@ -130,6 +130,8 @@ The detector's acoustic parameters are **not in the code**: they come from a nam
 
 Because a bare scalar is undiagnosable, the detector also **captures audio**: it keeps a rolling window (15 s) per input and writes a WAV clip (15 s before + 10 s after) when the on-fraction crosses a near-miss level (`NEAR_MISS_FRACTION`, 0.15) or an alarm fires — so any near-miss can be analysed after the fact with `analyze-recording.py`. Clips land in `/var/lib/mic-smoke-detector/clips` (0750; retrieve with `sudo cat`). Triggering `RECORD_TRIGGER` (`touch /var/lib/mic-smoke-detector/record-now`) writes a manual clip, which is how the **adversarial test** works: make the confusable sounds near the node (TV, music, vacuum, kettle, another alarm), or force a clip per sound, then analyse them to see the real false-positive margin.
 
+**Adversarial test (2026-10-13, home node):** a Rauchmelder test press (×2) against a kitchen oven beep. The presses drove the 5 s window on-fraction to **1.0** (1100/2510 frames "on"). The oven beep is *loud* (rms −47 dBFS) but **transient**: it trips both per-frame band thresholds for a single 10 ms frame (low ratio 0.049, high 0.023 — only ~1.6× and ~1.1× the 0.03/0.02 thresholds), giving a peak window fraction of **0.002** — about 150× below the 0.30 alarm. So everyday beeps are rejected not by the band thresholds but by the **duration** requirement (≥30% of a 5 s window); that gate is the load-bearing part and must be kept in the firmware port. A side note: the metric alone would not have caught this (0.002 never reaches the 0.15 near-miss), so the manual clip was what made the beep analyzable.
+
 **Measured acoustic signature** (a real Rauchwarnmelder, via the node's stream, 16 kHz mono, captured 2026-10-12):
 
 | Feature | Value |
