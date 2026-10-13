@@ -91,10 +91,17 @@
           description: Detect smoke alarms on the INMP441 mic node's audio
           binary: "{{ detector_script }}"
           runtime_user: mic-smoke-detector
+          data_dir: /var/lib/mic-smoke-detector
           environment:
             DETECTOR_INPUTS: "/etc/mic-smoke-detector-inputs.json"
             DETECTOR_PROFILES: "/etc/mic-smoke-detector-profiles.json"
             METRICS_ADDR: "0.0.0.0:9111"
+            # Near-miss/alarm audio clips (the node has one RTSP slot, so the
+            # detector captures them itself). Touch $(dir)/record-now for a
+            # manual clip during the adversarial test.
+            CLIP_DIR: "/var/lib/mic-smoke-detector/clips"
+            NEAR_MISS_FRACTION: "0.15"
+            RECORD_TRIGGER: "/var/lib/mic-smoke-detector/record-now"
             MIC_RTSP_USER: "frigate"
             MIC_RTSP_PASSWORD: "{{ vault_mic_rtsp_password }}"
             MQTT_HOST: "127.0.0.1"

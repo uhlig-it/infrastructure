@@ -29,6 +29,7 @@ import subprocess
 import sys
 import threading
 import time
+import wave
 from collections import deque
 
 SR = 16000
@@ -53,10 +54,16 @@ class Metrics:
 
     def __init__(self):
         self.state = {}
+        self.clips = {}
 
     def register(self, name, profile):
         self.state[name] = {"profile": profile, "on_fraction": 0.0,
                             "alarm": 0, "restarts": 0, "up": 0}
+        self.clips[name] = {}
+
+    def count_clip(self, name, kind):
+        if name in self.clips:
+            self.clips[name][kind] = self.clips[name].get(kind, 0) + 1
 
     def update(self, name, **fields):
         if name in self.state:
@@ -76,6 +83,8 @@ class Metrics:
             "# TYPE mic_detector_up gauge",
             "# HELP mic_detector_ffmpeg_restarts_total ffmpeg (re)starts",
             "# TYPE mic_detector_ffmpeg_restarts_total counter",
+            "# HELP mic_detector_clips_total audio clips written for analysis",
+            "# TYPE mic_detector_clips_total counter",
         ]
         for name, st in sorted(self.state.items()):
             labels = 'input="%s",profile="%s"' % (metric_escape(name),
@@ -84,6 +93,9 @@ class Metrics:
             out.append("mic_detector_alarm{%s} %d" % (labels, st["alarm"]))
             out.append("mic_detector_up{%s} %d" % (labels, st["up"]))
             out.append("mic_detector_ffmpeg_restarts_total{%s} %d" % (labels, st["restarts"]))
+            for kind, count in sorted(self.clips.get(name, {}).items()):
+                out.append('mic_detector_clips_total{input="%s",kind="%s"} %d'
+                           % (metric_escape(name), metric_escape(kind), count))
         return "\n".join(out) + "\n"
 
 
@@ -112,6 +124,79 @@ def serve_metrics(addr):
     server = http.server.ThreadingHTTPServer((host, int(port)), Handler)
     threading.Thread(target=server.serve_forever, daemon=True).start()
     log("metrics on http://%s:%s/metrics" % (host, port))
+
+
+class Clipper:
+    """A rolling audio window per input; writes a WAV clip when triggered, so a
+    near-miss or a test press can be analysed after the fact. The node serves a
+    single RTSP client, so the detector itself has to do the capturing."""
+
+    def __init__(self, name, clip_dir, pre_s, post_s, cooldown_s, max_clips):
+        self.name = name
+        self.safe = name.replace("/", "_").strip("_")
+        self.dir = clip_dir
+        self.pre_bytes = int(pre_s * SR * 2)
+        self.total_bytes = int((pre_s + post_s) * SR * 2)
+        self.cooldown_frames = int(cooldown_s * SR / HOP)
+        self.max_clips = max_clips
+        self.ring = bytearray()
+        self.rec = None
+        self.rec_kind = None
+        self.seq = 0
+        self.since_end = 10 ** 9
+        os.makedirs(self.dir, exist_ok=True)
+
+    def tick(self):
+        if self.rec is None:
+            self.since_end += 1
+
+    def feed(self, chunk):
+        self.ring += chunk
+        if len(self.ring) > self.pre_bytes:
+            del self.ring[:len(self.ring) - self.pre_bytes]
+        if self.rec is not None:
+            self.rec += chunk
+            if len(self.rec) >= self.total_bytes:
+                self._finish()
+
+    def trigger(self, kind):
+        if self.rec is not None:
+            # An alarm that starts during a near-miss clip relabels it.
+            if kind == "alarm" and self.rec_kind != "alarm":
+                self.rec_kind = "alarm"
+            return
+        if self.since_end >= self.cooldown_frames:
+            self.rec = bytearray(self.ring)
+            self.rec_kind = kind
+            log("[%s] capturing a %r clip" % (self.name, kind))
+
+    def _finish(self):
+        stamp = time.strftime("%Y%m%dT%H%M%SZ", time.gmtime())
+        self.seq += 1
+        path = os.path.join(self.dir, "%s-%s-%03d-%s.wav"
+                            % (self.safe, stamp, self.seq, self.rec_kind))
+        with wave.open(path, "wb") as w:
+            w.setnchannels(1)
+            w.setsampwidth(2)
+            w.setframerate(SR)
+            w.writeframes(bytes(self.rec))
+        log("[%s] wrote clip %s (%d KiB)" % (self.name, path, len(self.rec) // 1024))
+        METRICS.count_clip(self.name, self.rec_kind)
+        self.rec = None
+        self.since_end = 0
+        self._prune()
+
+    def _prune(self):
+        try:
+            files = sorted(f for f in os.listdir(self.dir)
+                           if f.startswith(self.safe + "-") and f.endswith(".wav"))
+        except OSError:
+            return
+        for old in files[:max(0, len(files) - self.max_clips)]:
+            try:
+                os.remove(os.path.join(self.dir, old))
+            except OSError:
+                pass
 
 
 def goertzel_power(samples, f, sr=SR):
@@ -199,10 +284,12 @@ def ffmpeg_command(source):
     return cmd
 
 
-def run_input(inp, profile, publisher, verbose=False):
+def run_input(inp, profile, publisher, clipper=None, near_miss=1.0,
+              record_trigger=None, verbose=False):
     """One input: (re)spawn ffmpeg, frame the audio, drive the state machine."""
     source = inp["url"]
     tag = inp["name"]
+    tick_count = 0
     frame_bytes = FRAME * 2
     hop_bytes = HOP * 2
     window_frames = int(profile["window_s"] * SR / HOP)
@@ -223,13 +310,25 @@ def run_input(inp, profile, publisher, verbose=False):
                 if not chunk:
                     break
                 raw += chunk
+                if clipper is not None:
+                    clipper.feed(chunk)
                 while len(raw) >= frame_bytes:
                     win = struct.unpack_from("<%dh" % FRAME, raw, 0)
                     win = [v / 32768.0 for v in win]
                     flags.append(frame_is_on(win, profile))
                     del raw[:hop_bytes]
+                    tick_count += 1
                     frac = sum(flags) / len(flags)
                     METRICS.update(tag, on_fraction=round(frac, 4), up=1)
+                    if clipper is not None:
+                        clipper.tick()
+                        if record_trigger and tick_count % 100 == 0 \
+                                and os.path.exists(record_trigger):
+                            try:
+                                os.remove(record_trigger)
+                            except OSError:
+                                pass
+                            clipper.trigger("manual")
                     if frac >= min_on:
                         since_clear = 0
                         if not alarm:
@@ -237,6 +336,8 @@ def run_input(inp, profile, publisher, verbose=False):
                             publisher.publish("ON")
                             alarm = True
                             METRICS.update(tag, alarm=1)
+                            if clipper is not None:
+                                clipper.trigger("alarm")
                     else:
                         since_clear += 1
                         if alarm and since_clear >= clear_frames:
@@ -244,6 +345,8 @@ def run_input(inp, profile, publisher, verbose=False):
                             publisher.publish("OFF")
                             alarm = False
                             METRICS.update(tag, alarm=0)
+                        elif clipper is not None and frac >= near_miss:
+                            clipper.trigger("nearmiss")
                     if verbose:
                         sys.stderr.write("[%s] on=%.0f%%\n" % (tag, 100 * frac))
         except Exception as exc:  # noqa: BLE001 - keep the service alive
@@ -312,6 +415,21 @@ def main():
     ap.add_argument("--mqtt-pass", default=os.environ.get("MQTT_PASS"))
     ap.add_argument("--metrics-addr", default=os.environ.get("METRICS_ADDR"),
                     help="host:port to serve /metrics on (default: $METRICS_ADDR)")
+    ap.add_argument("--clip-dir", default=os.environ.get("CLIP_DIR"),
+                    help="directory for near-miss/alarm audio clips (default: $CLIP_DIR; empty disables)")
+    ap.add_argument("--clip-pre", type=float,
+                    default=float(os.environ.get("CLIP_PRE_S", "15")))
+    ap.add_argument("--clip-post", type=float,
+                    default=float(os.environ.get("CLIP_POST_S", "10")))
+    ap.add_argument("--near-miss", type=float,
+                    default=float(os.environ.get("NEAR_MISS_FRACTION", "0.15")),
+                    help="on-fraction below the alarm that still captures a clip")
+    ap.add_argument("--clip-cooldown", type=float,
+                    default=float(os.environ.get("CLIP_COOLDOWN_S", "60")))
+    ap.add_argument("--clip-max", type=int,
+                    default=int(os.environ.get("CLIP_MAX", "300")))
+    ap.add_argument("--record-trigger", default=os.environ.get("RECORD_TRIGGER"),
+                    help="path that, when created, records a clip (default: $RECORD_TRIGGER)")
     ap.add_argument("--no-mqtt", action="store_true")
     ap.add_argument("--verbose", action="store_true")
     args = ap.parse_args()
@@ -330,6 +448,13 @@ def main():
             continue
         profile = prepare(profiles[inp["profile"]], inp["profile"])
         METRICS.register(inp["name"], inp["profile"])
+        clipper = None
+        if args.clip_dir:
+            try:
+                clipper = Clipper(inp["name"], args.clip_dir, args.clip_pre,
+                                  args.clip_post, args.clip_cooldown, args.clip_max)
+            except OSError as exc:
+                log("[%s] clips disabled (%r)" % (inp["name"], exc))
         publisher = Publisher(args.mqtt_host, args.mqtt_port, args.mqtt_user,
                               args.mqtt_pass, inp["topic"], enabled=not args.no_mqtt)
         _publishers.append(publisher)
@@ -339,7 +464,8 @@ def main():
                profile["on_fraction_min"], inp["topic"]))
         thread = threading.Thread(
             target=run_input, name=inp["name"], daemon=True,
-            args=(inp, profile, publisher, args.verbose))
+            args=(inp, profile, publisher, clipper, args.near_miss,
+                  args.record_trigger, args.verbose))
         thread.start()
         threads.append(thread)
 

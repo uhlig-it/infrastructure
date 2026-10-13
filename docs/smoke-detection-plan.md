@@ -128,6 +128,8 @@ The detector's acoustic parameters are **not in the code**: they come from a nam
 
 **Observability / soak (2026-10-13):** the service serves Prometheus metrics on `opus:9111` (`mic_detector_on_fraction`, `mic_detector_alarm`, `mic_detector_up`, `mic_detector_ffmpeg_restarts_total`), scraped by VictoriaMetrics (`mic-smoke-detector` job). The point is to soak the home detector against real life: `max_over_time(mic_detector_on_fraction[1h])` shows how close non-alarms (TV, music, the fridge, speech) come, so the thresholds can be confirmed before they are baked into the firmware. It publishes with a dedicated `mic-detector` broker user rather than the shared `frigate` one.
 
+Because a bare scalar is undiagnosable, the detector also **captures audio**: it keeps a rolling window (15 s) per input and writes a WAV clip (15 s before + 10 s after) when the on-fraction crosses a near-miss level (`NEAR_MISS_FRACTION`, 0.15) or an alarm fires — so any near-miss can be analysed after the fact with `analyze-recording.py`. Clips land in `/var/lib/mic-smoke-detector/clips` (0750; retrieve with `sudo cat`). Triggering `RECORD_TRIGGER` (`touch /var/lib/mic-smoke-detector/record-now`) writes a manual clip, which is how the **adversarial test** works: make the confusable sounds near the node (TV, music, vacuum, kettle, another alarm), or force a clip per sound, then analyse them to see the real false-positive margin.
+
 **Measured acoustic signature** (a real Rauchwarnmelder, via the node's stream, 16 kHz mono, captured 2026-10-12):
 
 | Feature | Value |
@@ -185,7 +187,7 @@ Neither alarm source ever produced `smoke_detector` (or `fire_alarm`): the model
 ## Open questions
 
 - **Port the detector to the node firmware** — the server-side service on `opus` is a stepping stone; detecting on the ESP32 would let the RTSP server (and the `opus` service) be removed. The tone/pattern algorithm and the profile format are language-agnostic and already validated.
-- **Deploy the shop node** (the prerequisite for the shop to alert at all) — the INMP441 hardware, wiring, and the `shop-router` DHCP reservation are pending. Then add a `werkstatt` entry to `detector_inputs` (profile `smoke_shop_v1`, topic `mic/werkstatt/smoke_alarm`) and confirm or retune the profile against the real node — its levels are provisional, from a phone recording.
+- **Deploy the shop node** (the prerequisite for the shop to alert at all) — the INMP441 hardware, wiring, and the `shop-router` DHCP reservation are pending. It is also the only way to capture the workshop's real ambient noise and the shop detectors' tones through the production chain (a phone recording gives bands but not levels), and cheap to build. Then add a `werkstatt` entry to `detector_inputs` (profile `smoke_shop_v1`, topic `mic/werkstatt/smoke_alarm`) and confirm or retune the profile against the real node.
 
 ## Related / out of scope
 
