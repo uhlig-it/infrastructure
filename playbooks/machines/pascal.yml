@@ -1,11 +1,9 @@
 ---
-# Source: github.com/uhlig-it/pascal
+# Migrated from github.com/uhlig-it/pascal (archived 2026-10-14).
 # Tailscale is configured by playbooks/fleet/tailscale.yml.
 # OctoPrint is published as a Tailscale Service (svc:octoprint) via the
-# `octoprint` role; the old haproxy + manual tailscale cert are gone.
-# TODO: migrate the remaining inline tasks from the source repo:
-#       - install github3.py
-#       - install shop-health script/service/timer
+# `octoprint` role; the old haproxy + manual tailscale cert are gone, and the
+# github3.py / is-tls-expiring machinery went with them.
 - name: pascal 3D printer server
   hosts: pascal
   collections:
@@ -31,3 +29,8 @@
     - role: go2rtc
       become: true
       tags: [ go2rtc ]
+    # shop-health probes the workshop Pi from pascal (same 192.168.1.0/24 LAN)
+    # and records reachability as a node_exporter textfile metric.
+    - role: shop-health
+      become: true
+      tags: [ shop-health ]

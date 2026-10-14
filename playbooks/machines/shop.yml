@@ -1,8 +1,7 @@
 ---
-# Source: github.com/uhlig-it/shop
+# Migrated from github.com/uhlig-it/shop (archived 2026-10-14).
 # Tailscale is configured by playbooks/fleet/tailscale.yml.
 # Camera and sensor variables live in inventory/host_vars/shop.yml.
-# TODO: migrate the local roles into roles/: switchbot-mqtt, shop-watchdog.
 - name: shop workshop Pi
   hosts: shop
   gather_facts: true

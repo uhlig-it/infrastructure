@@ -1,0 +1,8 @@
+[Unit]
+Description=Probe shop reachability and record it as a textfile metric
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/sbin/shop-health.sh lan
