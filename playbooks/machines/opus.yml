@@ -1,5 +1,5 @@
 ---
-# Source: github.com/uhlig-it/opus
+# Migrated from github.com/uhlig-it/opus (archived 2026-10-13).
 # Tailscale is configured by playbooks/fleet/tailscale.yml.
 - name: opus home server
   hosts: opus
