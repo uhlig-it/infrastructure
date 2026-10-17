@@ -16,8 +16,8 @@ ci_deploy_public_key: "ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAACAQDNWOmKQ2CwofcZD29Ee
 infrastructure_root: "{{ inventory_dir }}/.."
 
 # Path to the application source checkout for deploys that build from source
-# (wordclock, meal-tracker, speisehof, nowak-reisen, mqtt-router,
-# speedtest-exporter, tasmota-firmware-proxy, mqtt-gpio-binary-sensor).
+# (wordclock, meal-tracker, mqtt-router, speedtest-exporter,
+# tasmota-firmware-proxy, mqtt-gpio-binary-sensor).
 # CI passes this as an extra-var; locally, point it at the app repo.
 app_source: ""
 
