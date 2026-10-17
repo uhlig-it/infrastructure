@@ -46,6 +46,15 @@
         mode: "0644"
       register: inputs_copied
       tags: [profile]
+    - name: The smoke-test helper is installed
+      # mic-smoke-test reads the credentials from this role's environment file,
+      # so a shop test is "ssh opus 'sudo mic-smoke-test watch'" with no secrets
+      # on the command line. See docs/smoke-detection-shop-test.md.
+      ansible.builtin.copy:
+        src: "{{ playbook_dir }}/files/mic-smoke-test.sh"
+        dest: /usr/local/bin/mic-smoke-test
+        mode: "0755"
+      tags: [helper]
     - name: paho-mqtt is present (the detector's MQTT client)
       ansible.builtin.apt:
         name: python3-paho-mqtt

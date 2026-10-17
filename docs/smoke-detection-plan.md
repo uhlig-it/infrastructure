@@ -172,6 +172,8 @@ python3 playbooks/services/files/analyze-recording.py /tmp/det.wav --profile smo
 
 The tool's regression check is built in: run on the home recording it reproduces the `smoke_home_v1` outcome (both presses detected, no false positives).
 
+**Shop node live (2026-10-15):** the workshop node is built, flashed and running — `shop` firmware, `profile smoke_shop_v1`, publishing `mic/werkstatt/smoke_alarm` (retained, with the `OFF` last-will), healthy on `/metrics` and connected to the shop broker, which bridges `mic/#` to `opus`. The remaining step is the acoustic confirmation/retune of `smoke_shop_v1` against the real node; the prepared procedure is in [`smoke-detection-shop-test.md`](smoke-detection-shop-test.md).
+
 ## Detection findings: Frigate's audio model does not detect our alarms
 
 Established 2026-10-11 against the home node. Frigate's built-in audio detector is a generic **AudioSet** classifier (521 classes; `/cpu_audio_model.tflite`, 2023) whose `smoke_detector`/`fire_alarm` classes were trained on (mostly US/UK) YouTube clips. German Rauchwarnmelder have **no standardised tone**: EN 14604 / DIN 14676 fix only the loudness (≥85 dB(A) at 3 m) and that the low-battery chirp differs from the alarm — the alarm waveform is manufacturer-specific (~3–4 kHz piezo, continuous or pulsed).
@@ -191,7 +193,7 @@ Neither alarm source ever produced `smoke_detector` (or `fire_alarm`): the model
 ## Open questions
 
 - **Port the detector to the node firmware** — the server-side service on `opus` is a stepping stone; detecting on the ESP32 would let the RTSP server (and the `opus` service) be removed. The tone/pattern algorithm and the profile format are language-agnostic and already validated.
-- **Deploy the shop node** (the prerequisite for the shop to alert at all) — the INMP441 hardware, wiring, and the `shop-router` DHCP reservation are pending. It is also the only way to capture the workshop's real ambient noise and the shop detectors' tones through the production chain (a phone recording gives bands but not levels), and cheap to build. Then add a `werkstatt` entry to `detector_inputs` (profile `smoke_shop_v1`, topic `mic/werkstatt/smoke_alarm`) and confirm or retune the profile against the real node.
+- **Deploy the shop node** (the prerequisite for the shop to alert at all) — **done as hardware (2026-10-15): the node is built, flashed and running** (`shop` firmware, `profile smoke_shop_v1`, MQTT connected, publishing `mic/werkstatt/smoke_alarm`), healthy on `/metrics` from the shop LAN and reachable from `opus` over the tailnet. What remains is the **acoustic test** — confirm or retune `smoke_shop_v1` against the real node (the phone recording's AGC inflated its levels) — and the **`shop-router` DHCP reservation** (the node answers on a dynamic lease, `192.168.1.147` at first check, versus the intended `192.168.1.40`). The procedure is prepared in [`smoke-detection-shop-test.md`](smoke-detection-shop-test.md). The on-device detector is the shipped path, so there is no `werkstatt` `detector_input` to add; that doc's capture-and-analyse step covers the tuning directly against the node.
 
 ## Related / out of scope
 
