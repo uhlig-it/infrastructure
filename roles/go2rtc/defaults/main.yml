@@ -11,6 +11,11 @@ go2rtc_arch:
 # name -> source, rendered into the `streams:` block.
 go2rtc_streams: {}
 
+# Optional: bind every listener (api/rtsp/webrtc) to this address instead of all
+# interfaces, e.g. the Tailscale IPv4, so streams and the exec-capable API stay
+# off the LAN.
+go2rtc_listen: ""
+
 # Optional: a static ffmpeg to transcode with. go2rtc refuses ffmpeg < 5, and
 # Debian bullseye ships 4.3, so hosts that need mjpeg->h264 transcoding point
 # go2rtc at a self-contained build.

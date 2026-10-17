@@ -1,11 +1,36 @@
 - name: Home Assistant directory exists
   ansible.builtin.file:
-    path: /opt/homeassistant
+    path: "{{ homeassistant_config_dir }}"
     state: directory
     owner: suhlig
     group: suhlig
   become: true
   tags: [ docker, homeassistant, directory ]
+- name: Packages directory exists
+  ansible.builtin.file:
+    path: "{{ homeassistant_config_dir }}/packages"
+    state: directory
+    owner: suhlig
+    group: suhlig
+  become: true
+  tags: [ docker, homeassistant, config ]
+- name: Smoke/fire alerting package is present
+  ansible.builtin.template:
+    src: packages/smoke_detection.yaml.j2
+    dest: "{{ homeassistant_config_dir }}/packages/smoke_detection.yaml"
+    owner: suhlig
+    group: suhlig
+    mode: "0644"
+  become: true
+  tags: [ docker, homeassistant, config ]
+- name: Home Assistant loads its packages directory
+  ansible.builtin.lineinfile:
+    path: "{{ homeassistant_config_dir }}/configuration.yaml"
+    regexp: '^  packages:'
+    line: '  packages: !include_dir_named packages'
+    insertafter: '^homeassistant:'
+  become: true
+  tags: [ docker, homeassistant, config ]
 - name: Home Assistant is running
   community.docker.docker_container:
     name: homeassistant

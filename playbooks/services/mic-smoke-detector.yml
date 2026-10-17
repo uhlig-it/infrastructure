@@ -1,0 +1,130 @@
+---
+# Detects German smoke alarms (Rauchwarnmelder) on the INMP441 mic nodes' audio
+# and publishes mic/<room>/smoke_alarm for HA's critical push.
+#
+# The detector (playbooks/services/files/mic-smoke-detector.py) reads its
+# acoustic parameters from a named profile (mic-smoke-detector-profiles.json)
+# and its list of nodes from mic-smoke-detector-inputs.json; a different
+# detector type is a new profile, tuned with analyze-recording.py. The same
+# algorithm is later ported to the node firmware. See
+# docs/smoke-detection-plan.md, Phase 6.
+- name: Deploy the mic-node smoke-alarm detector
+  hosts: opus
+  become: true
+  gather_facts: true
+  vars:
+    detector_script: "{{ playbook_dir }}/files/mic-smoke-detector.py"
+    detector_profiles: "{{ playbook_dir }}/files/mic-smoke-detector-profiles.json"
+    # One entry per mic node. The RTSP credential is NOT here (this file is
+    # plaintext) - it comes from MIC_RTSP_USER/MIC_RTSP_PASSWORD. Add the shop
+    # node (profile smoke_shop_v1) once its hardware exists.
+    detector_inputs:
+      - name: living_room
+        host: 192.168.10.40
+        profile: smoke_home_v1
+        # TEMPORARY during the on-device migration: the node now owns
+        # mic/living_room/smoke_alarm, so the server-side detector publishes to
+        # a parallel topic for a few days of A/B comparison, then retires.
+        topic: mic/living_room/smoke_alarm_opus
+    # The node streams L16 PCM over RTSP; ffmpeg decodes it to raw PCM for the
+    # detector. bullseye is EOL (its security archive's debs are gone), so
+    # ffmpeg is installed as a self-contained static build into /usr/local/bin
+    # rather than via apt.
+    ffmpeg_static_url: https://johnvansickle.com/ffmpeg/releases/ffmpeg-release-amd64-static.tar.xz
+  pre_tasks:
+    - name: Detector profiles are present
+      ansible.builtin.copy:
+        src: "{{ detector_profiles }}"
+        dest: /etc/mic-smoke-detector-profiles.json
+        mode: "0644"
+      register: profiles_copied
+      tags: [profile]
+    - name: Detector inputs are present
+      ansible.builtin.copy:
+        content: "{{ detector_inputs | to_nice_json }}\n"
+        dest: /etc/mic-smoke-detector-inputs.json
+        mode: "0644"
+      register: inputs_copied
+      tags: [profile]
+    - name: The smoke-test helper is installed
+      # mic-smoke-test reads the credentials from this role's environment file,
+      # so a shop test is "ssh opus 'sudo mic-smoke-test watch'" with no secrets
+      # on the command line. See docs/smoke-detection-shop-test.md.
+      ansible.builtin.copy:
+        src: "{{ playbook_dir }}/files/mic-smoke-test.sh"
+        dest: /usr/local/bin/mic-smoke-test
+        mode: "0755"
+      tags: [helper]
+    - name: paho-mqtt is present (the detector's MQTT client)
+      ansible.builtin.apt:
+        name: python3-paho-mqtt
+        state: present
+      tags: [python, mqtt]
+    - name: ffmpeg is present
+      ansible.builtin.stat:
+        path: /usr/local/bin/ffmpeg
+      register: ffmpeg_bin
+      tags: [ffmpeg]
+    - name: Static ffmpeg is installed
+      when: not ffmpeg_bin.stat.exists
+      tags: [ffmpeg]
+      block:
+        - name: Static ffmpeg archive is downloaded
+          ansible.builtin.get_url:
+            url: "{{ ffmpeg_static_url }}"
+            dest: /tmp/ffmpeg-static.tar.xz
+            mode: "0644"
+        - name: Static ffmpeg archive is unpacked
+          ansible.builtin.unarchive:
+            src: /tmp/ffmpeg-static.tar.xz
+            dest: /tmp/ffmpeg-static
+            remote_src: true
+            creates: /tmp/ffmpeg-static
+        - name: Static ffmpeg binaries are installed
+          ansible.builtin.shell: >-
+            set -euo pipefail;
+            install -m 0755 /tmp/ffmpeg-static/*/ffmpeg /usr/local/bin/ffmpeg;
+            install -m 0755 /tmp/ffmpeg-static/*/ffprobe /usr/local/bin/ffprobe
+          args:
+            creates: /usr/local/bin/ffmpeg
+        - name: Static ffmpeg staging is removed
+          ansible.builtin.file:
+            path: "{{ item }}"
+            state: absent
+          loop:
+            - /tmp/ffmpeg-static
+            - /tmp/ffmpeg-static.tar.xz
+  roles:
+    - role: uhlig-it.simple_systemd_service
+      become: true
+      vars:
+        program:
+          name: mic-smoke-detector
+          description: Detect smoke alarms on the INMP441 mic node's audio
+          binary: "{{ detector_script }}"
+          runtime_user: mic-smoke-detector
+          data_dir: /var/lib/mic-smoke-detector
+          environment:
+            DETECTOR_INPUTS: "/etc/mic-smoke-detector-inputs.json"
+            DETECTOR_PROFILES: "/etc/mic-smoke-detector-profiles.json"
+            METRICS_ADDR: "0.0.0.0:9111"
+            # Near-miss/alarm audio clips (the node has one RTSP slot, so the
+            # detector captures them itself). Touch $(dir)/record-now for a
+            # manual clip during the adversarial test.
+            CLIP_DIR: "/var/lib/mic-smoke-detector/clips"
+            NEAR_MISS_FRACTION: "0.15"
+            RECORD_TRIGGER: "/var/lib/mic-smoke-detector/record-now"
+            MIC_RTSP_USER: "frigate"
+            MIC_RTSP_PASSWORD: "{{ vault_mic_rtsp_password }}"
+            MQTT_HOST: "127.0.0.1"
+            MQTT_PORT: "1883"
+            MQTT_USER: "mic-detector"
+            MQTT_PASS: "{{ mosquitto_users | selectattr('name', 'equalto', 'mic-detector') | map(attribute='password') | first }}"
+      tags: [mic, smoke, detector, mqtt, systemd, service]
+  tasks:
+    - name: Detector is restarted when its profiles or inputs change
+      ansible.builtin.systemd:
+        name: mic-smoke-detector.service
+        state: restarted
+      when: profiles_copied.changed or inputs_copied.changed
+      tags: [profile, service]

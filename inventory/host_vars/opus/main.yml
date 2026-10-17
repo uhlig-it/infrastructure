@@ -15,3 +15,19 @@ tailscale_services:
   - name: svc:status
     port: 443
     backend: http://localhost:3001
+
+# Frigate: camera sources and the (non-secret) audio wiring live here in
+# plaintext; only the MQTT password and the node's RTSP/HTTP passwords are vaulted.
+frigate:
+  mqtt:
+    host: "100.102.100.41"
+    user: "frigate"
+    password: "{{ vault_frigate_mqtt_password }}"
+  cameras:
+    werkstatt:
+      source: "ffmpeg:rtsp://shop.tailnet-204f.ts.net:8554/cam"
+    printer:
+      source: "rtsp://pascal.tailnet-204f.ts.net:8554/printer"
+  # The INMP441 node is deliberately NOT a Frigate camera: Frigate's audio model
+  # does not detect our (German) smoke alarms, so a purpose-built detector reads
+  # the node's stream directly instead. See docs/smoke-detection-plan.md.

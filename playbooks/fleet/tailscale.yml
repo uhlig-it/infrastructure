@@ -8,8 +8,10 @@
     - role: artis3n.tailscale
       become: true
 
-- name: Enable IP forwarding on exit nodes
-  hosts: exit_nodes
+- name: Enable IP forwarding on routers
+  # Subnet routers need forwarding too, not just exit nodes: `shop` forwards the
+  # workshop LAN (192.168.1.0/24) so `opus` can reach an ESP32 on that WLAN.
+  hosts: "exit_nodes:subnet_routers"
   tasks:
     - name: Enable IPv4 forwarding
       ansible.posix.sysctl:

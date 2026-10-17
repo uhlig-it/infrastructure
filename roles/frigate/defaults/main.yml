@@ -2,3 +2,10 @@
 # recordings it knows about; the cleanup task sweeps up the rest (e.g.
 # recordings from before a database reset that Frigate no longer tracks).
 frigate_record_retain_days: 3
+
+# Audio-detector RMS gate: below this level Frigate does not run audio
+# detection (a CPU-saving threshold). Tune from the Frigate UI's Audio tab.
+# Lowered from the 500 default so a real smoke-alarm horn actually opens the
+# gate and reaches the detector (ambient peaks ~45 here); finalise after an
+# end-to-end test with the alarm.
+frigate_audio_min_volume: 200

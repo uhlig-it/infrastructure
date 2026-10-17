@@ -1,0 +1,61 @@
+# {{ ansible_managed }}
+#
+# Emergency smoke/fire pushes from the purpose-built smoke-alarm detector (the
+# INMP441 mic node's audio; see docs/smoke-detection-plan.md, Phase 5/6).
+# Frigate's own audio model does not detect our (German) alarms, so the trigger
+# is the detector's MQTT topic, not frigate/*/audio/*. Loaded through the
+# `packages:` include the role adds to configuration.yaml.
+#
+# Managed here, not in the UI: the container is restarted on deploy, so edits
+# made in Home Assistant's UI would be lost. The alert is `critical`, so it
+# bypasses the iPhone's silent switch / Do Not Disturb.
+automation:
+  - id: mic_living_room_smoke_emergency
+    alias: 'Wohnzimmer Mic: fire/smoke emergency push'
+    mode: single
+    trigger:
+      - platform: mqtt
+        topic: mic/living_room/smoke_alarm
+        payload: 'ON'
+    action:
+      - action: {{ homeassistant_smoke_notify_service }}
+        continue_on_error: true
+        data:
+          title: 🚨 Rauchalarm Wohnzimmer
+          message: "The mic-node detector heard a smoke alarm in the living room."
+          data:
+            push:
+              sound:
+                name: default
+                critical: 1
+                volume: 1.0
+            tag: smoke-alarm
+            group: smoke-alarm
+
+  - id: werkstatt_alarm_fire_notify
+    alias: 'Werkstatt Alarm: fire/smoke push'
+    mode: single
+    trigger:
+      - platform: mqtt
+        topic: mic/werkstatt/smoke_alarm
+        payload: 'ON'
+    condition:
+      - condition: not
+        conditions:
+          - condition: state
+            entity_id: alarm_control_panel.werkstatt
+            state: triggered
+    action:
+      - action: {{ homeassistant_smoke_notify_service }}
+        continue_on_error: true
+        data:
+          title: 🚨 Feuer/Rauch Werkstatt
+          message: "The mic-node detector heard a smoke alarm in the workshop."
+          data:
+            push:
+              sound:
+                name: default
+                critical: 1
+                volume: 1.0
+            tag: smoke-alarm
+            group: smoke-alarm
