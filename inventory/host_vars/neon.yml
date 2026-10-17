@@ -1,7 +1,8 @@
 ---
 ansible_user: root
 
-# Hosts kehrkraft, GoToSocial, uhlig.it, speisehof.de, nowak-reisen.de.
+# Hosts kehrkraft, GoToSocial and uhlig.it. The speisehof.de and nowak-reisen.de
+# services, and neon's own baseline, moved to nowak-reisen/infrastructure.
 
 # Host key for the Concourse deploy task's known_hosts. The task-library's
 # lib/tasks/ansible/ssh-known-hosts extracts ._meta.hostvars.*.public_key and
