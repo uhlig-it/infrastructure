@@ -59,7 +59,7 @@ jobs:
         if: ${{ hashFiles('app/go.mod') != '' }}
         uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # actions/setup-go@v5
         with:
-          go-version-file: app/go.mod
+          go-version: '1.27.x'
       - name: Install goreleaser
         if: ${{ hashFiles('app/go.mod') != '' }}
         run: go install github.com/goreleaser/goreleaser/v2@latest
