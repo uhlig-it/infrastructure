@@ -1,0 +1,9 @@
+---
+# Record only (group "unmanaged"): not yet deployed to by any playbook.
+# Pop!_OS 24.04, x86_64, WiFi client (wlp3s0). Tailscale node `tape`
+# (100.122.159.71, owner suhlig@). Was offline ("3d"); brought online
+# 2026-10-18 as the Linux test device for the WiFi diagnosis (see
+# wifi-woes-2026-October/README.md). Reachable via Tailscale as `tape`.
+# For that test, passwordless sudo was enabled for suhlig
+# (`/etc/sudoers.d/suhlig`, NOPASSWD: ALL) — revisit whether that stays.
+ansible_user: suhlig
