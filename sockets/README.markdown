@@ -77,7 +77,9 @@ Live fleet as of 2026-10-18:
 
 The `sonoff-*` entries that used to be listed here are retired: the home sonoffs are offline and replaced by the `nousA8T-*` generation, and the workshop sonoffs (`192.168.1.20-.22`) do not answer either. Their group and device command files can be dropped once the hardware is gone.
 
-`nousA8T-6` and `nousA8T-7` were powered up on 2026-10-18 and still need the full `print-config` push (to set `Topic`/`FullTopic`) plus the `tasmota32-nousa8t.bin` OTA; `nousA8T-0..5` already match this config.
+`home/common.commands` ends with `Ap 1`: Tasmota persists the last-used WiFi slot (`sta_active`) and tries that slot first on boot, so a device that once fell back to slot 2 keeps preferring it and never moves to slot 1. `Ap 1` forces slot 1 after the `print-config` push sets the slots. The workshop must NOT get this line: its slot 1 is a network that does not exist there. If a push ever truncates (long HTTP `Backlog` on older firmware), send `Ap 1` separately afterwards.
+
+`nousA8T-6` and `nousA8T-7` were brought up to the registry on 2026-10-18: `Topic`/`FullTopic`/group topics set, moved to `uhlig.iot`, and OTA'd from the firmware proxy — which served `16.0.0(nousa8t)`, newer than the `15.6.0(nousa8t)` on `nousA8T-0..5`.
 
 
 TODO The new project `tasmota-discover` will show which devices are online.
