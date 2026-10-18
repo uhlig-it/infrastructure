@@ -1,0 +1,25 @@
+WIP home/sonoff-0 (Julian)
+
+{
+  "Timers": "ON",
+  "Timer1": {
+    "Enable": 1,
+    "Mode": 0,
+    "Time": "03:00",
+    "Window": 0,
+    "Days": "1111111",
+    "Repeat": 1,
+    "Output": 1,
+    "Action": 1
+  },
+  "Timer2": {
+    "Enable": 1,
+    "Mode": 0,
+    "Time": "05:00",
+    "Window": 0,
+    "Days": "1111111",
+    "Repeat": 1,
+    "Output": 1,
+    "Action": 0
+  }
+}

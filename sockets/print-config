@@ -1,0 +1,26 @@
+#!/bin/bash
+
+set -euo pipefail
+IFS=$'\n\t'
+
+# First argument is the name of the device, all others are the command files
+export NAME=${1:?Missing argument for device name}
+shift
+
+_=${MQTT_HOST:?MQTT host missing}
+_=${MQTT_PORT:?MQTT port missing}
+_=${MQTT_USER:?MQTT user missing}
+_=${MQTT_USER_PASSWORD:?MQTT password missing}
+_=${WEB_PASSWORD:?web password missing}
+_=${WIFI_SSID_1}
+_=${WIFI_PASSWORD_1}
+_=${WIFI_SSID_2}
+_=${WIFI_PASSWORD_2}
+
+for command_file in "$@"; do
+  COMMANDS+="$(envsubst < "$command_file");"
+done
+
+# According to https://tasmota.github.io/docs/Commands/#the-power-of-backlog
+# the chain of commands needs to start with 'backlog'.
+echo Backlog "$COMMANDS" | tr '\n' ';'

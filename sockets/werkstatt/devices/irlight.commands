@@ -1,0 +1,5 @@
+grouptopic1 tasmotas
+grouptopic2 sockets
+Timers 1
+Timer1 {"Arm":1,"Mode":1,"Time":"01:00","Window":0,"Days":"0000000","Repeat":1,"Output":1,"Action":0}
+Timer2 {"Arm":1,"Mode":2,"Time":"-01:00","Window":0,"Days":"0000000","Repeat":1,"Output":1,"Action":1}

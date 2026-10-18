@@ -1,0 +1,9 @@
+#!/bin/bash
+
+source_up_if_exists
+
+export MQTT_HOST=shop.lan
+export MQTT_USER=gosund
+export MQTT_USER_PASSWORD=change-me
+
+# The workshop WiFi slots are inherited from the parent `.envrc`.

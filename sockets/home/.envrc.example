@@ -1,0 +1,14 @@
+#!/bin/bash
+
+source_up_if_exists
+
+export MQTT_HOST=192.168.10.164
+export MQTT_USER=sonoff
+export MQTT_USER_PASSWORD=change-me
+
+# Home WiFi after the move to the IoT SSID. Keep `uhlig.wlan` in slot 2 as
+# the fallback so a failed move cannot strand a device.
+export WIFI_SSID_1=uhlig.iot
+export WIFI_PASSWORD_1=change-me
+export WIFI_SSID_2=uhlig.wlan
+export WIFI_PASSWORD_2=change-me

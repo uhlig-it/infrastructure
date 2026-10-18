@@ -1,0 +1,16 @@
+#!/bin/bash
+
+# Copy this file to `.envrc` (gitignored) and fill in the values.
+# `print-config` reads these variables from the environment. Shared values
+# live here; the per-location MQTT and WiFi settings are overridden in
+# `home/.envrc` and `werkstatt/.envrc`.
+
+export MQTT_PORT=1883
+export WEB_PASSWORD=change-me
+
+# Default WiFi slots. The workshop uses these; the home location overrides
+# them in `home/.envrc`.
+export WIFI_SSID_1=uhlig.wlan
+export WIFI_PASSWORD_1=change-me
+export WIFI_SSID_2=uhlig.shop
+export WIFI_PASSWORD_2=change-me
