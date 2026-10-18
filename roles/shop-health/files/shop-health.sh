@@ -8,7 +8,7 @@
 # Query (or later alert on) the metric instead.
 #
 # Modes:
-#   lan       -- ping shop by its LAN name (shop.lan); run this on pascal
+#   lan       -- ping shop on its LAN address; run this on pascal
 #                (same 192.168.1.0/24 network as shop)
 #   tailscale -- check the shop node in the local tailnet; run this
 #                anywhere Tailscale is installed
@@ -32,7 +32,7 @@
 # SHOP_HEALTH_TEXTFILE_DIR at that host's own textfile directory.
 
 MODE="${1:-tailscale}"
-LAN_HOST="shop.lan"
+LAN_IP="192.168.1.2"
 TS_NODE="shop"
 TEXTFILE_DIR="${SHOP_HEALTH_TEXTFILE_DIR:-/var/lib/node_exporter}"
 STATE_DIR="${SHOP_HEALTH_STATE:-/tmp/shop-health}"
@@ -46,7 +46,7 @@ mkdir -p "$TEXTFILE_DIR" "$STATE_DIR" 2>/dev/null || exit 1
 
 check() {
   case "$MODE" in
-    lan) ping -c 1 -W 2 "$LAN_HOST" >/dev/null 2>&1 ;;
+    lan) ping -c 1 -W 2 "$LAN_IP" >/dev/null 2>&1 ;;
     tailscale)
       tailscale status --json 2>/dev/null |
         jq -e --arg h "$TS_NODE" '.Peer | to_entries[] | select(.value.HostName == $h) | .value.Online' >/dev/null 2>&1 ;;
