@@ -30,6 +30,13 @@
     owner: suhlig
     group: suhlig
     mode: "0644"
+    # The package contains Home Assistant's own Jinja ({{ value_json.state }},
+    # {% set %}, ...). Use delimiters Ansible does not claim, so only [[ ]] is
+    # rendered here and HA's templates survive verbatim.
+    variable_start_string: "[["
+    variable_end_string: "]]"
+    block_start_string: "[%"
+    block_end_string: "%]"
   become: true
   tags: [ docker, homeassistant, config ]
 - name: Home Assistant loads its packages directory

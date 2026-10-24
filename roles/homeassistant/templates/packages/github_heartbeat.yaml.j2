@@ -1,4 +1,4 @@
-# {{ ansible_managed }}
+# [[ ansible_managed ]]
 #
 # Dependency-automation heartbeat. The github-heartbeat container on opus
 # publishes one retained JSON verdict to github/heartbeat/state; this package
@@ -53,7 +53,7 @@ automation:
       - repeat:
           for_each: "{{ state_attr('sensor.github_dependency_heartbeat', 'needs') or [] }}"
           sequence:
-            - action: {{ homeassistant_heartbeat_notify_service }}
+            - action: [[ homeassistant_heartbeat_notify_service ]]
               continue_on_error: true
               data:
                 title: Dependency PR needs you
@@ -71,7 +71,7 @@ automation:
       - repeat:
           for_each: "{{ state_attr('sensor.github_dependency_heartbeat', 'alerts') or [] }}"
           sequence:
-            - action: {{ homeassistant_heartbeat_notify_service }}
+            - action: [[ homeassistant_heartbeat_notify_service ]]
               continue_on_error: true
               data:
                 title: Dependabot alerts
@@ -88,7 +88,7 @@ automation:
           - condition: template
             value_template: "{{ state_attr('sensor.github_dependency_heartbeat', 'silent') is not none }}"
         then:
-          - action: {{ homeassistant_heartbeat_notify_service }}
+          - action: [[ homeassistant_heartbeat_notify_service ]]
             continue_on_error: true
             data:
               title: Renovate has gone quiet
@@ -107,7 +107,7 @@ automation:
           - condition: template
             value_template: "{{ (state_attr('sensor.github_dependency_heartbeat', 'errors') or []) | count > 0 }}"
         then:
-          - action: {{ homeassistant_heartbeat_notify_service }}
+          - action: [[ homeassistant_heartbeat_notify_service ]]
             continue_on_error: true
             data:
               title: Dependency check could not read some repositories
@@ -131,7 +131,7 @@ automation:
         to: "on"
         for: "00:30:00"
     action:
-      - action: {{ homeassistant_heartbeat_notify_service }}
+      - action: [[ homeassistant_heartbeat_notify_service ]]
         continue_on_error: true
         data:
           title: Dependency heartbeat is not reporting

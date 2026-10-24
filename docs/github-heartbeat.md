@@ -242,8 +242,8 @@ The image lives here rather than in a separate repository: it is an ops tool, no
 - The token is re-read every cycle, so rotating the PAT is a vault change plus a playbook run, not a container restart.
 - Do not put this container under watchtower: the pinned version tag already prevents it, because watchtower would pull the same tag.
 - Adding the `github-heartbeat` MQTT user requires the mosquitto role to regenerate the broker passwd file; run `ansible-playbook playbooks/machines/opus.yml --tags mosquitto` after the vault change.
-- The HA package must be templated by the role, not edited in the UI, because an HA rebuild or a container restart would discard UI edits.
-- The role templates the package but does not restart Home Assistant. Restart it (`docker restart homeassistant`) so the new MQTT sensor and automations are loaded; this matches the existing smoke-detection package, which also relies on the next restart.
+- The HA package must be templated by the role, not edited in the UI, because an HA rebuild or a container restart would discard UI edits. The package contains Home Assistant's own Jinja, so the role templates it with `[[ ]]` and `[% %]` delimiters; do not change that task to a plain `template` call, or Ansible will try to resolve `value_json` and friends.
+- The role templates the package but does not restart Home Assistant. Restart it (`docker restart homeassistant`) so the new MQTT sensor and automations are loaded; this matches the existing smoke-detection package, which also relies on the next restart. Deploy the package with `ansible-playbook playbooks/machines/opus.yml --tags homeassistant --skip-tags container` to avoid pulling a new HA image.
 
 ## Notification policy
 
@@ -277,7 +277,7 @@ Remaining, in order:
 3. Tag and push `github-heartbeat-v0.1.1`; confirm the workflow publishes `ghcr.io/uhlig-it/github-heartbeat:v0.1.1`.
 4. Run `ansible-playbook playbooks/services/github-heartbeat.yml`.
 5. Verify the retained state with `mosquitto_sub`, and that `sensor.github_dependency_heartbeat` shows `ok` or `attention` in Developer Tools → States.
-6. Run `ansible-playbook playbooks/machines/opus.yml --tags homeassistant`, restart Home Assistant, then confirm the entities and automations exist.
+6. Run `ansible-playbook playbooks/machines/opus.yml --tags homeassistant --skip-tags container`, restart Home Assistant, then confirm the entities and automations exist.
 7. Test the notifications through Developer Tools → Actions, then run the acceptance checks, including the stale-container case.
 
 ## Acceptance criteria
