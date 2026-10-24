@@ -23,6 +23,22 @@
     mode: "0644"
   become: true
   tags: [ docker, homeassistant, config ]
+- name: Dependency heartbeat package is present
+  ansible.builtin.template:
+    src: packages/github_heartbeat.yaml.j2
+    dest: "{{ homeassistant_config_dir }}/packages/github_heartbeat.yaml"
+    owner: suhlig
+    group: suhlig
+    mode: "0644"
+    # The package contains Home Assistant's own Jinja ({{ value_json.state }},
+    # {% set %}, ...). Use delimiters Ansible does not claim, so only [[ ]] is
+    # rendered here and HA's templates survive verbatim.
+    variable_start_string: "[["
+    variable_end_string: "]]"
+    block_start_string: "[%"
+    block_end_string: "%]"
+  become: true
+  tags: [ docker, homeassistant, config ]
 - name: Home Assistant loads its packages directory
   ansible.builtin.lineinfile:
     path: "{{ homeassistant_config_dir }}/configuration.yaml"
