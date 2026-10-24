@@ -72,8 +72,8 @@ Dependabot:
 
 Current findings at handover, for calibration:
 
-- DONE `suhlig/concourse-rss-resource#391` — a Dependabot bump of aruba, four days old, repository has no CI and no automerge, so it will never resolve itself.
-- `suhlig/wordclock` — three open Dependabot alerts.
+- `suhlig/concourse-rss-resource#391` — a Dependabot bump of aruba, four days old, repository has no CI and no automerge, so it will never resolve itself. By the first live run (2026-10-24 16:07 UTC) it had been resolved; the two PRs still open in that repository are human-authored and are ignored by design.
+- `suhlig/wordclock` — three open Dependabot alerts. This is the exception the first live run reported.
 - Everything else was in flight or clean.
 
 ## Decisions taken in this revision
@@ -282,8 +282,8 @@ Remaining, in order:
 
 ## Acceptance criteria
 
-- With `STUCK_DAYS=0`, the sensor reports `attention` and one notification arrives naming each stuck PR.
-- With the real settings, the sensor reports `attention` for `concourse-rss-resource#391` and the three `wordclock` alerts, and nothing else.
+- With `STUCK_DAYS=0`, the sensor reports `attention` and one notification arrives naming each stuck PR, provided at least one bot PR is open. With no open bot PRs the rule correctly stays silent.
+- With the real settings, the sensor reports `attention` for the three `wordclock` alerts and nothing else, as observed on the first live run.
 - No notification is produced by an ordinary Renovate PR that is opened, tested and merged unattended.
 - Notification text includes repository, PR number, reason and age, and tapping it opens the PR.
 - A second evaluation with unchanged exceptions does not produce a second notification.
