@@ -1,0 +1,143 @@
+# {{ ansible_managed }}
+#
+# Dependency-automation heartbeat. The github-heartbeat container on opus
+# publishes one retained JSON verdict to github/heartbeat/state; this package
+# turns a changed set of exceptions into passive iOS notifications, and reports
+# when the check itself stops reporting. See docs/github-heartbeat.md.
+#
+# Managed here, not in the UI: the container is restarted on deploy, so edits
+# made in Home Assistant's UI would be lost.
+
+mqtt:
+  sensor:
+    - name: GitHub dependency heartbeat
+      unique_id: github_dependency_heartbeat
+      state_topic: github/heartbeat/state
+      value_template: "{{ value_json.state }}"
+      json_attributes_topic: github/heartbeat/state
+      availability_topic: github/heartbeat/status
+      payload_available: online
+      payload_not_available: offline
+      device_class: enum
+      options: [ok, attention]
+
+template:
+  - binary_sensor:
+      - name: GitHub dependency heartbeat stale
+        unique_id: github_dependency_heartbeat_stale
+        device_class: problem
+        # Deliberately not mqtt `expire_after`: that timer resets whenever HA
+        # re-subscribes to the retained message, including after an HA restart.
+        # Comparing checked_at against the clock is independent of that.
+        state: >-
+          {% set ts = state_attr('sensor.github_dependency_heartbeat', 'checked_at') %}
+          {{ ts is none or (as_timestamp(now()) - as_timestamp(ts)) > 5400 }}
+
+automation:
+  - id: github_dependency_heartbeat_attention
+    alias: 'GitHub heartbeat: needs you'
+    mode: queued
+    max: 20
+    trigger:
+      # Fires only when the set of exceptions changes, so an unchanged set does
+      # not re-notify. A new exception while the state stays attention still
+      # changes the fingerprint and still notifies.
+      - platform: state
+        entity_id: sensor.github_dependency_heartbeat
+        attribute: fingerprint
+    condition:
+      - condition: state
+        entity_id: sensor.github_dependency_heartbeat
+        state: attention
+    action:
+      - repeat:
+          for_each: "{{ state_attr('sensor.github_dependency_heartbeat', 'needs') or [] }}"
+          sequence:
+            - action: {{ homeassistant_heartbeat_notify_service }}
+              continue_on_error: true
+              data:
+                title: Dependency PR needs you
+                message: >-
+                  {{ repeat.item.repo }}#{{ repeat.item.number }} {{ repeat.item.reason }}:
+                  {{ repeat.item.title }} ({{ repeat.item.age_days }}d)
+                data:
+                  tag: "gh-hb-{{ repeat.item.repo | replace('/', '-') }}-{{ repeat.item.number }}"
+                  group: github-heartbeat
+                  thread-id: github-heartbeat
+                  url: "{{ repeat.item.url }}"
+                  push:
+                    interruption-level: passive
+
+      - repeat:
+          for_each: "{{ state_attr('sensor.github_dependency_heartbeat', 'alerts') or [] }}"
+          sequence:
+            - action: {{ homeassistant_heartbeat_notify_service }}
+              continue_on_error: true
+              data:
+                title: Dependabot alerts
+                message: "{{ repeat.item.repo }}: {{ repeat.item.count }} open alert(s)"
+                data:
+                  tag: "gh-hb-alerts-{{ repeat.item.repo | replace('/', '-') }}"
+                  group: github-heartbeat
+                  thread-id: github-heartbeat
+                  url: "https://github.com/{{ repeat.item.repo }}/security/dependabot"
+                  push:
+                    interruption-level: passive
+
+      - if:
+          - condition: template
+            value_template: "{{ state_attr('sensor.github_dependency_heartbeat', 'silent') is not none }}"
+        then:
+          - action: {{ homeassistant_heartbeat_notify_service }}
+            continue_on_error: true
+            data:
+              title: Renovate has gone quiet
+              message: >-
+                {% set s = state_attr('sensor.github_dependency_heartbeat', 'silent') %}
+                {% if s.since is not none %}No Renovate activity in any repository since {{ s.since }} ({{ s.days }}d).
+                {% else %}{{ s.reason }}{% endif %}
+              data:
+                tag: github-heartbeat-silent
+                group: github-heartbeat
+                thread-id: github-heartbeat
+                push:
+                  interruption-level: passive
+
+      - if:
+          - condition: template
+            value_template: "{{ (state_attr('sensor.github_dependency_heartbeat', 'errors') or []) | count > 0 }}"
+        then:
+          - action: {{ homeassistant_heartbeat_notify_service }}
+            continue_on_error: true
+            data:
+              title: Dependency check could not read some repositories
+              message: >-
+                {% set errors = state_attr('sensor.github_dependency_heartbeat', 'errors') or [] %}
+                {{ errors | map(attribute='repo') | join(', ') }} ({{ errors | count }}):
+                {{ errors[0].error | truncate(140) }}
+              data:
+                tag: github-heartbeat-errors
+                group: github-heartbeat
+                thread-id: github-heartbeat
+                push:
+                  interruption-level: passive
+
+  - id: github_dependency_heartbeat_stale
+    alias: 'GitHub heartbeat: check is dead'
+    mode: single
+    trigger:
+      - platform: state
+        entity_id: binary_sensor.github_dependency_heartbeat_stale
+        to: "on"
+        for: "00:30:00"
+    action:
+      - action: {{ homeassistant_heartbeat_notify_service }}
+        continue_on_error: true
+        data:
+          title: Dependency heartbeat is not reporting
+          message: >-
+            No heartbeat for over 90 minutes. On opus: docker logs github-heartbeat
+          data:
+            tag: github-heartbeat-dead
+            group: github-heartbeat
+            thread-id: github-heartbeat
