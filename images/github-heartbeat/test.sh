@@ -51,6 +51,12 @@ args="$*"
 case $args in
   "pr list --repo a/b"*) cat "$HB_FIXTURES/a_b_prs.json" ;;
   "pr list --repo c/d"*) cat "$HB_FIXTURES/c_d_prs.json" ;;
+  "pr list --repo suhlig/tokencheck"*)
+    printf '%s\n' "$GH_TOKEN" >> "$HB_TOKEN_LOG"
+    exit 1 ;;
+  "pr list --repo uhlig-it/tokencheck"*)
+    printf '%s\n' "$GH_TOKEN" >> "$HB_TOKEN_LOG"
+    exit 1 ;;
   "pr list --repo e/f"*)
     echo "HTTP 404: Not Found (https://api.github.com/repos/e/f)" >&2
     exit 1 ;;
@@ -84,6 +90,7 @@ export GITHUB_TOKEN_FILE="$root/token"
 export REPOS="a/b,c/d,e/f"
 export MQTT_USER=user
 export MQTT_PASSWORD=pass
+export HB_TOKEN_LOG="$root/token-seen"
 
 bash "$here/heartbeat.sh" --once > "$root/out1.json"
 bash "$here/heartbeat.sh" --once > "$root/out2.json"
@@ -114,6 +121,19 @@ echo "--- state topic publishes"
 grep -c '^\-h 127.0.0.1 -p 1883 -u user -P pass -r -t github/heartbeat/state' "$root/mqtt.log"
 echo "--- status topic publishes"
 grep -c '^\-h 127.0.0.1 -p 1883 -u user -P pass -r -t github/heartbeat/status -m online' "$root/mqtt.log"
+
+echo "--- per-owner tokens"
+printf 'suhlig-token\n' > "$root/token-suhlig"
+printf 'uhlig-token\n' > "$root/token-uhlig-it"
+GITHUB_TOKEN_FILE="$root/token-suhlig" GITHUB_TOKEN_FILE_UHLIG_IT="$root/token-uhlig-it" \
+  REPOS="suhlig/tokencheck,uhlig-it/tokencheck" bash "$here/heartbeat.sh" --once > /dev/null 2>&1
+python3 - "$root" <<'PY'
+import sys
+root = sys.argv[1]
+seen = open(f"{root}/token-seen").read().split()
+assert seen == ["suhlig-token", "uhlig-token"], seen
+print("per-owner token assertions: ok")
+PY
 
 echo "--- error changes the fingerprint"
 REPOS="a/b,c/d" bash "$here/heartbeat.sh" --once > "$root/out4.json" 2>/dev/null

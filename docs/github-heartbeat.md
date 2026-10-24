@@ -198,19 +198,24 @@ Rules:
 
 ## Auth and secrets
 
-Fine-grained PAT, read-only, limited to the two owners:
+Fine-grained PATs, read-only. A fine-grained PAT belongs to exactly one resource owner, so covering the two owners needs two tokens:
+
+- `vault_github_heartbeat_token` for `suhlig`.
+- `vault_github_heartbeat_token_uhlig_it` for `uhlig-it`.
+
+Each needs:
 
 - Metadata: read (mandatory).
 - Pull requests: read.
 - Issues: read (the Dependency Dashboard is an issue).
 - Dependabot alerts: read.
 
-For classic PATs, `repo` is what the subscription and pull request endpoints needed in practice; verify whether Dependabot alerts additionally require `security_events` before relying on a classic token. Note that `uhlig-it` may require organization approval for a fine-grained PAT. If approval is impractical, either drop the `uhlig-it` repositories or use a classic token; do not let the check silently lose half its coverage, which is why per-repository errors are part of the contract.
+`uhlig-it` may require organization approval. Until it is granted, those repositories surface as `errors`, never as silence. If you prefer a single credential, a classic PAT with `repo` and `security_events` covers both owners but grants write access far beyond what this check needs; `repo` alone is enough for pull requests and issues, while Dependabot alerts need `security_events`. The script selects `GITHUB_TOKEN_FILE_<OWNER>` for each repository and falls back to `GITHUB_TOKEN_FILE`, so a single token remains valid configuration.
 
 Storage:
 
-- `vault_github_heartbeat_token` in `inventory/group_vars/all/secrets.yml`.
-- Rendered by the playbook to `/opt/github-heartbeat/token`, `root:65534`, mode `0440`, with `no_log: true`, and mounted read-only at `/run/secrets/github-token`.
+- `vault_github_heartbeat_token` and, optionally, `vault_github_heartbeat_token_uhlig_it` in `inventory/group_vars/all/secrets.yml`.
+- Rendered by the playbook to `/opt/github-heartbeat/token` and `/opt/github-heartbeat/token-uhlig-it`, `root:65534`, mode `0440`, with `no_log: true`, and mounted read-only at `/run/secrets/github-token` and `/run/secrets/github-token-uhlig-it`.
 - MQTT credentials: add a `github-heartbeat` entry to `mosquitto_users` in `inventory/host_vars/opus/secrets.yml` (where every broker user lives), the same way `mic-detector` is provisioned, and select the password in the playbook with `selectattr('name', 'equalto', 'github-heartbeat')`.
 
 ## Scaffolded files
@@ -254,7 +259,7 @@ The package in `roles/homeassistant/templates/packages/github_heartbeat.yaml.j2`
 ## Testing
 
 1. `bash images/github-heartbeat/test.sh` — network-free, with a fake `gh` and `mosquitto_pub`. It asserts the classification order, that human and green PRs are ignored, the per-repository error path, alerts enabled vs. disabled, the no-dashboard case and fingerprint stability.
-2. `docker run --rm --network host -v /opt/github-heartbeat/token:/run/secrets/github-token:ro -e GITHUB_TOKEN_FILE=/run/secrets/github-token -e REPOS=... -e MQTT_USER=... -e MQTT_PASSWORD=... ghcr.io/uhlig-it/github-heartbeat:v0.1.0 --once` on `opus`, and inspect the JSON with `jq`.
+2. `docker run --rm --network host -v /opt/github-heartbeat/token:/run/secrets/github-token:ro -v /opt/github-heartbeat/token-uhlig-it:/run/secrets/github-token-uhlig-it:ro -e GITHUB_TOKEN_FILE=/run/secrets/github-token -e GITHUB_TOKEN_FILE_UHLIG_IT=/run/secrets/github-token-uhlig-it -e REPOS=... -e MQTT_USER=... -e MQTT_PASSWORD=... ghcr.io/uhlig-it/github-heartbeat:v0.1.1 --once` on `opus`, and inspect the JSON with `jq`.
 3. `mosquitto_sub -h 127.0.0.1 -u ... -P ... -v -t 'github/#'` while the container runs, to confirm both topics and the retained flag.
 4. Set `STUCK_DAYS=0` and confirm `attention`, then confirm the iPhone shows exactly one notification per exception and that a second cycle with unchanged exceptions adds none.
 5. Add one new exception (for example by temporarily adding a repository with an open Dependabot PR) and confirm a new notification arrives while the state stays `attention`.
@@ -267,9 +272,9 @@ Scaffolded in this revision: classifier and tests; image and build workflow; ser
 
 Remaining, in order:
 
-1. Create the fine-grained PAT and add `vault_github_heartbeat_token` to `inventory/group_vars/all/secrets.yml`; add `github-heartbeat` to `mosquitto_users` in `inventory/host_vars/opus/secrets.yml`.
+1. Create the fine-grained PATs and add `vault_github_heartbeat_token` (and optionally `vault_github_heartbeat_token_uhlig_it`) to `inventory/group_vars/all/secrets.yml`; add `github-heartbeat` to `mosquitto_users` in `inventory/host_vars/opus/secrets.yml`.
 2. Run `ansible-playbook playbooks/machines/opus.yml --tags mosquitto` so the broker passwd file includes the new user.
-3. Tag and push `github-heartbeat-v0.1.0`; confirm the workflow publishes `ghcr.io/uhlig-it/github-heartbeat:v0.1.0`.
+3. Tag and push `github-heartbeat-v0.1.1`; confirm the workflow publishes `ghcr.io/uhlig-it/github-heartbeat:v0.1.1`.
 4. Run `ansible-playbook playbooks/services/github-heartbeat.yml`.
 5. Verify the retained state with `mosquitto_sub`, and that `sensor.github_dependency_heartbeat` shows `ok` or `attention` in Developer Tools → States.
 6. Run `ansible-playbook playbooks/machines/opus.yml --tags homeassistant`, restart Home Assistant, then confirm the entities and automations exist.
@@ -285,7 +290,7 @@ Remaining, in order:
 - Stopping the container produces a staleness notification within two hours.
 - An unreadable repository produces `errors` and `attention`, not silence.
 - The check runs with the Mac powered off.
-- The token exists only in the Ansible vault and in a `root:65534` `0440` file on `opus`; it is absent from `/opt/homeassistant` and from the B2 backups.
+- The tokens exist only in the Ansible vault and in `root:65534` `0440` files on `opus`; they are absent from `/opt/homeassistant` and from the B2 backups.
 
 ## Known pitfalls
 

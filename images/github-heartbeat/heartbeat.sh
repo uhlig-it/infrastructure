@@ -11,7 +11,13 @@
 # process never talks to Home Assistant.
 #
 # Configuration (environment):
-#   GITHUB_TOKEN_FILE  file holding a GitHub token (required)
+#   GITHUB_TOKEN_FILE  default GitHub token file (required)
+#   GITHUB_TOKEN_FILE_SUHLIG
+#   GITHUB_TOKEN_FILE_UHLIG_IT
+#                      optional per-owner overrides. A fine-grained PAT is scoped
+#                      to a single resource owner, so covering both owners needs
+#                      two tokens; a classic PAT can serve as the default for
+#                      both. The owner is the part before the first `/`.
 #   REPOS              comma-separated owner/repo list (required)
 #   INTERVAL_SECONDS   loop interval, default 1800
 #   STUCK_DAYS         Renovate PR age that counts as stuck, default 7
@@ -140,11 +146,25 @@ trap cleanup EXIT
 
 # ----------------------------------------------------------------------- plumbing
 
-load_token() {
+load_default_token() {
   [[ -r $token_file ]] || { log "cannot read $token_file"; return 1; }
-  GH_TOKEN=$(tr -d '[:space:]' < "$token_file")
-  [[ -n $GH_TOKEN ]] || { log "$token_file is empty"; return 1; }
-  export GH_TOKEN
+  [[ -n $(tr -d '[:space:]' < "$token_file") ]] || { log "$token_file is empty"; return 1; }
+}
+
+# A fine-grained PAT belongs to exactly one resource owner, so the two owners in
+# the repository list may need different tokens. Add a branch here when a third
+# owner joins the check.
+token_for_owner() {
+  local owner=$1 file token
+  case $owner in
+    suhlig) file=${GITHUB_TOKEN_FILE_SUHLIG:-$token_file} ;;
+    uhlig-it) file=${GITHUB_TOKEN_FILE_UHLIG_IT:-$token_file} ;;
+    *) file=$token_file ;;
+  esac
+  [[ -r $file ]] || { log "cannot read token for $owner ($file)"; return 1; }
+  token=$(tr -d '[:space:]' < "$file")
+  [[ -n $token ]] || { log "token file for $owner is empty ($file)"; return 1; }
+  printf '%s' "$token"
 }
 
 publish() {
@@ -160,8 +180,6 @@ publish_status() {
 # ------------------------------------------------------------------------- cycle
 
 run_cycle() {
-  load_token || return 1
-
   local needs_file="$tmpdir/needs.ndjson"
   local alerts_file="$tmpdir/alerts.ndjson"
   local errors_file="$tmpdir/errors.ndjson"
@@ -173,9 +191,15 @@ run_cycle() {
   local checked=0
   local unreadable=0
   local last_activity=0
-  local repo pr_json issues_json alert_out count dashboard ts err
+  local repo token pr_json issues_json alert_out count dashboard ts err
 
   for repo in "${repos[@]}"; do
+    if ! token=$(token_for_owner "${repo%%/*}"); then
+      jq -n --arg repo "$repo" --arg error "no readable token for owner ${repo%%/*}" \
+        '{repo: $repo, error: $error}' >> "$errors_file"
+      continue
+    fi
+    export GH_TOKEN=$token
     if pr_json=$(gh pr list --repo "$repo" --state open --limit 100 \
                    --json number,title,createdAt,url,author,mergeable,statusCheckRollup \
                    2>"$err_file"); then
@@ -300,8 +324,8 @@ run_cycle() {
 
 # -------------------------------------------------------------------------- main
 
-# Fail fast on a bad mount rather than looping forever with no token.
-load_token || exit 1
+# Fail fast on a bad mount rather than looping forever with no default token.
+load_default_token || exit 1
 publish_status online
 
 if $once; then
