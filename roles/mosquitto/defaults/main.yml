@@ -19,3 +19,43 @@ mosquitto_lwt_guards:
     probe: http://localhost:5000/api/version
   - topic: werkstatt/alarm/available
     probe: http://localhost:9101/healthz
+  # Tasmota plugs have the same failure shape after an OTA: the old and new
+  # firmware share a client ID, session takeover republishes the old will, and
+  # the retained 'Offline' survives even though the plug is connected. The web
+  # UI probe uses the same Basic-auth credential as the VictoriaMetrics scrape;
+  # a genuinely dead plug fails the probe and keeps its retained 'Offline'.
+  # Tasmota's discovery config advertises 'Online' (capital O) and Home
+  # Assistant compares it literally, so these entries must not reuse the
+  # lowercase message used by the other guards.
+  - topic: home/nousA8T-0/tele/LWT
+    probe: http://192.168.10.5/cm?cmnd=Status%2011
+    probe_auth: "admin:{{ gosund_metrics_password }}"
+    message: Online
+  - topic: home/nousA8T-1/tele/LWT
+    probe: http://192.168.10.6/cm?cmnd=Status%2011
+    probe_auth: "admin:{{ gosund_metrics_password }}"
+    message: Online
+  - topic: home/nousA8T-2/tele/LWT
+    probe: http://192.168.10.7/cm?cmnd=Status%2011
+    probe_auth: "admin:{{ gosund_metrics_password }}"
+    message: Online
+  - topic: home/nousA8T-3/tele/LWT
+    probe: http://192.168.10.8/cm?cmnd=Status%2011
+    probe_auth: "admin:{{ gosund_metrics_password }}"
+    message: Online
+  - topic: home/nousA8T-4/tele/LWT
+    probe: http://192.168.10.9/cm?cmnd=Status%2011
+    probe_auth: "admin:{{ gosund_metrics_password }}"
+    message: Online
+  - topic: home/nousA8T-5/tele/LWT
+    probe: http://192.168.10.10/cm?cmnd=Status%2011
+    probe_auth: "admin:{{ gosund_metrics_password }}"
+    message: Online
+  - topic: home/nousA8T-6/tele/LWT
+    probe: http://192.168.10.11/cm?cmnd=Status%2011
+    probe_auth: "admin:{{ gosund_metrics_password }}"
+    message: Online
+  - topic: home/nousA8T-7/tele/LWT
+    probe: http://192.168.10.12/cm?cmnd=Status%2011
+    probe_auth: "admin:{{ gosund_metrics_password }}"
+    message: Online

@@ -5,13 +5,17 @@
 # (broker restart, container recreate, watchtower update, bridge retained
 # replay) self-heals within the cron interval. Service down => its probe
 # fails => no publish => the LWT ('offline') stands.
+status=0
+# This also runs immediately after a broker restart; give the broker a moment
+# before the first publish so a failed connect is not mistaken for a dead probe.
+sleep 3
 {% for guard in mosquitto_lwt_guards %}
-if curl -sf --max-time 5 '{{ guard.probe }}' >/dev/null 2>&1; then
+if curl -sf --max-time 5 {% if guard.probe_auth is defined %}-u {{ guard.probe_auth | quote }} {% endif %}{{ guard.probe | quote }} >/dev/null 2>&1; then
     docker exec mosquitto mosquitto_pub -h 127.0.0.1 -p 1883 \
         -u '{{ mosquitto_stale_lwt_user }}' \
         -P '{{ (mosquitto_users | selectattr('name', 'equalto', mosquitto_stale_lwt_user) | map(attribute='password') | first | default('')) }}' \
         -r -t '{{ guard.topic }}' \
-        -m online
+        -m {{ guard.message | default('online') }} || status=1
 fi
 {% endfor %}
-exit 0
+exit $status
