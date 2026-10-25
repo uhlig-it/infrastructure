@@ -72,6 +72,7 @@
     owner: root
     group: root
   become: true
+  no_log: true # the script now embeds the Tasmota web password
   tags: [ docker, mosquitto, mqtt ]
 - name: Availability guard is run right after the broker (re)start
   ansible.builtin.command: /opt/mosquitto/availability-guard.sh
