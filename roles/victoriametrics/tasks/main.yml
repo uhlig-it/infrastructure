@@ -18,4 +18,6 @@
 
 - name: VictoriaMetrics is deployed
   include_tasks: victoriametrics.yml
-  tags: [ victoriametrics ]
+  # `dashboards` lets a dashboard-only change be applied without reinstalling
+  # the binary; `configuration` does the same for the scrape config.
+  tags: [ victoriametrics, dashboards, configuration ]

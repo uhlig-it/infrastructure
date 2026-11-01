@@ -1,16 +1,5 @@
 ---
 # Home Assistant's config directory on the host; the container bind-mounts it as
-# /config. The role manages a `packages/` file here (see templates/packages/).
+# /config. The role ensures the `packages/` directory exists and is loaded;
+# the packages themselves are owned and installed by the apps.
 homeassistant_config_dir: /opt/homeassistant
-
-# Emergency smoke/fire alerts go to this mobile_app notify *service* rather than
-# the notify *entity*: a critical alert carries a data payload
-# (data.push.sound.critical) that the newer notify.send_message entity action
-# cannot. The service name is `notify.mobile_app_<slug of the app device name>`
-# (see the mobile_app docs).
-homeassistant_smoke_notify_service: notify.mobile_app_iphone_15_pro_steffen
-
-# Routine dependency-automation notifications. Kept separate from the smoke
-# alert service so the heartbeat can move to another device without touching
-# the emergency path.
-homeassistant_heartbeat_notify_service: notify.mobile_app_iphone_15_pro_steffen

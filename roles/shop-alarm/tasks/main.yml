@@ -36,3 +36,112 @@
     volumes:
       - /opt/shop-alarm/state:/var/lib/shop-alarm
   tags: [ docker, shop-alarm, container ]
+
+# Home Assistant integration. The app ships its own package (the helpers and
+# the six notification/NFC automations); this role only renders it with the
+# deployment values from inventory/host_vars/opus. The package must not be
+# duplicated in the UI-managed automations.yaml or configuration.yaml, so the
+# migration below removes those copies on hosts that still carry them.
+- name: The app checkout is available for the Home Assistant package
+  ansible.builtin.assert:
+    that: app_source | length > 0
+    fail_msg: >-
+      Pass the shop-alarm checkout as app_source (the deploy workflow does this
+      automatically; locally use -e app_source=/path/to/shop-alarm).
+  tags: [ docker, shop-alarm, ha, config ]
+- name: Home Assistant packages directory exists
+  ansible.builtin.file:
+    path: "{{ shop_alarm_ha_config_dir }}/packages"
+    state: directory
+    owner: suhlig
+    group: suhlig
+  become: true
+  tags: [ docker, shop-alarm, ha, config ]
+- name: Workshop alarm package is present
+  ansible.builtin.template:
+    src: "{{ shop_alarm_ha_package_src }}"
+    dest: "{{ shop_alarm_ha_package_dest }}"
+    owner: suhlig
+    group: suhlig
+    mode: "0644"
+    # The package contains Home Assistant's own Jinja ({{ ... }}, {% ... %}),
+    # so only the [[ ]] placeholders are rendered by Ansible.
+    variable_start_string: "[["
+    variable_end_string: "]]"
+    block_start_string: "[%"
+    block_end_string: "%]"
+  notify: Home Assistant is restarted
+  become: true
+  tags: [ docker, shop-alarm, ha, config ]
+- name: Existing automations file is checked
+  ansible.builtin.stat:
+    path: "{{ shop_alarm_ha_config_dir }}/automations.yaml"
+  register: shop_alarm_automations_file
+  become: true
+  tags: [ docker, shop-alarm, ha, config, migration ]
+- name: Legacy workshop-alarm automations are removed from automations.yaml
+  ansible.builtin.replace:
+    path: "{{ shop_alarm_ha_config_dir }}/automations.yaml"
+    regexp: '(?ms)^- id: {{ item }}\n.*?(?=^- id:|\Z)'
+    replace: ''
+  loop:
+    - werkstatt_alarm_triggered_notify
+    - werkstatt_alarm_still_arming_notify
+    - werkstatt_alarm_fault_notify
+    - werkstatt_alarm_ack_mute
+    - werkstatt_nfc_outside_disarm
+    - werkstatt_nfc_inside_arm
+  when: shop_alarm_automations_file.stat.exists
+  become: true
+  tags: [ docker, shop-alarm, ha, config, migration ]
+- name: Workshop-alarm helpers are removed from configuration.yaml
+  ansible.builtin.replace:
+    path: "{{ shop_alarm_ha_config_dir }}/configuration.yaml"
+    regexp: '(?ms)^input_boolean:\n  werkstatt_alarm_muted:\n    name: Werkstatt Alarm Muted\ninput_text:\n  werkstatt_alarm_last_fault:\n    name: Werkstatt Alarm Last Fault\n'
+    replace: ''
+  become: true
+  tags: [ docker, shop-alarm, ha, config, migration ]
+- name: automations.yaml is read for the duplicate check
+  ansible.builtin.slurp:
+    src: "{{ shop_alarm_ha_config_dir }}/automations.yaml"
+  register: shop_alarm_automations_content
+  when: shop_alarm_automations_file.stat.exists
+  become: true
+  tags: [ docker, shop-alarm, ha, config, migration ]
+- name: Workshop-alarm automations are owned by the package only
+  ansible.builtin.assert:
+    that:
+      - "('id: ' ~ item) not in (shop_alarm_automations_content.content | b64decode)"
+    fail_msg: >-
+      automations.yaml still defines {{ item }}; remove the hand-managed copy
+      so packages/shop_alarm.yaml is the only definition.
+    quiet: true
+  loop:
+    - werkstatt_alarm_triggered_notify
+    - werkstatt_alarm_still_arming_notify
+    - werkstatt_alarm_fault_notify
+    - werkstatt_alarm_ack_mute
+    - werkstatt_nfc_outside_disarm
+    - werkstatt_nfc_inside_arm
+  # In check mode the replace above is only simulated, so the file still holds
+  # the old copies; the assertion would always fail there.
+  when: shop_alarm_automations_file.stat.exists and not ansible_check_mode
+  become: true
+  tags: [ docker, shop-alarm, ha, config, migration ]
+- name: configuration.yaml is read for the helper check
+  ansible.builtin.slurp:
+    src: "{{ shop_alarm_ha_config_dir }}/configuration.yaml"
+  register: shop_alarm_configuration_content
+  become: true
+  tags: [ docker, shop-alarm, ha, config, migration ]
+- name: Workshop-alarm helpers are owned by the package only
+  ansible.builtin.assert:
+    that:
+      - "'werkstatt_alarm_muted' not in (shop_alarm_configuration_content.content | b64decode)"
+      - "'werkstatt_alarm_last_fault' not in (shop_alarm_configuration_content.content | b64decode)"
+    fail_msg: >-
+      configuration.yaml still defines the workshop-alarm helpers; remove them
+      so packages/shop_alarm.yaml owns them.
+  when: not ansible_check_mode
+  become: true
+  tags: [ docker, shop-alarm, ha, config, migration ]

@@ -1,7 +1,8 @@
 ---
 # VictoriaMetrics on soda plus Prometheus node exporters across the fleet.
-# Source: github.com/uhlig-it/metrics
-# TODO: migrate the local `victoriametrics` role into roles/victoriametrics/.
+# Dashboards in roles/victoriametrics/files/dashboards/ are generic or
+# machine-level (nodes, shop-machine). The workshop alarm dashboard is owned by
+# the shop-alarm app and installed by playbooks/services/shop-alarm.yml.
 - name: Deploy VictoriaMetrics
   hosts: victoriametrics
   become: true

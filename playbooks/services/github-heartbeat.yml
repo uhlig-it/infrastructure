@@ -2,13 +2,15 @@
 # The GitHub dependency heartbeat: a read-only GitHub client that reports the
 # dependency-automation exceptions that need a human. It publishes one retained
 # JSON verdict to the local broker; Home Assistant turns that into iOS
-# notifications through roles/homeassistant/templates/packages/. It never talks
-# to Home Assistant.
+# notifications through the app's package. It never talks to Home Assistant.
 #
-# Image: images/github-heartbeat/ in this repo, published as
-# ghcr.io/uhlig-it/github-heartbeat by build-github-heartbeat.yml. The tag is
-# pinned on purpose: watchtower must not change the component that watches
-# everything else.
+# App: github.com/uhlig-it/github-heartbeat (classifier, tests, Dockerfile and
+# the HA package). Its CI publishes ghcr.io/uhlig-it/github-heartbeat on
+# `github-heartbeat-v*` tags. The tag is pinned on purpose: watchtower must not
+# change the component that watches everything else.
+#
+# HA package: the app ships ha/github_heartbeat.yaml.j2; this play renders it
+# with the notify service from inventory/host_vars/opus.
 #
 # Secrets: `vault_github_heartbeat_token` (group vars) and a
 # `github-heartbeat` entry in `mosquitto_users` (in
@@ -25,7 +27,7 @@
 # them. A classic PAT with `repo` and `security_events` covers both owners in one
 # variable, at the cost of much broader access.
 #
-# See docs/github-heartbeat.md.
+# See github.com/uhlig-it/github-heartbeat/blob/main/docs/github-heartbeat.md.
 - name: Deploy the GitHub dependency heartbeat
   hosts: opus
   become: true
@@ -98,6 +100,39 @@
       no_log: true
       tags: [ docker, github-heartbeat, config ]
 
+    - name: The app checkout is available for the Home Assistant package
+      ansible.builtin.assert:
+        that: app_source | length > 0
+        fail_msg: >-
+          Pass the github-heartbeat checkout as app_source (the deploy workflow
+          does this automatically; locally use
+          -e app_source=/path/to/github-heartbeat).
+      tags: [ docker, github-heartbeat, ha, config ]
+
+    - name: Home Assistant packages directory exists
+      ansible.builtin.file:
+        path: /opt/homeassistant/packages
+        state: directory
+        owner: suhlig
+        group: suhlig
+      tags: [ docker, github-heartbeat, ha, config ]
+
+    - name: Dependency heartbeat package is present
+      ansible.builtin.template:
+        src: "{{ app_source }}/ha/github_heartbeat.yaml.j2"
+        dest: /opt/homeassistant/packages/github_heartbeat.yaml
+        owner: suhlig
+        group: suhlig
+        mode: "0644"
+        # The package contains Home Assistant's own Jinja; only the [[ ]]
+        # placeholder is rendered by Ansible.
+        variable_start_string: "[["
+        variable_end_string: "]]"
+        block_start_string: "[%"
+        block_end_string: "%]"
+      notify: Home Assistant is restarted
+      tags: [ docker, github-heartbeat, ha, config ]
+
     - name: Heartbeat is running
       community.docker.docker_container:
         name: github-heartbeat
@@ -124,3 +159,10 @@
           - /opt/github-heartbeat/token:/run/secrets/github-token:ro
           - /opt/github-heartbeat/token-uhlig-it:/run/secrets/github-token-uhlig-it:ro
       tags: [ docker, github-heartbeat, container ]
+  handlers:
+    - name: Home Assistant is restarted
+      community.docker.docker_container:
+        name: homeassistant
+        state: started
+        restart: true
+      tags: [ docker, github-heartbeat, ha, service ]

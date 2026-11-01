@@ -22,9 +22,15 @@
     - name: Config file is present
       become: true
       ansible.builtin.copy:
-        src: "{{ playbook_dir }}/files/shorts.yml"
+        # The calendar URL is a capability URL: anyone holding it can read the
+        # published calendar. Keep it in the vault, off the command line, and
+        # readable only by the service user.
+        content: "rw3: {{ shorts_calendar_url }}\n"
         dest: /etc/shorts.yml
-        mode: "0644"
+        owner: shorts
+        group: shorts
+        mode: "0600"
+      no_log: true
       register: config_copied
       tags: [shorts, yaml, config]
     - name: Service is restarted

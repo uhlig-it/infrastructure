@@ -31,3 +31,23 @@ frigate:
   # The INMP441 node is deliberately NOT a Frigate camera: Frigate's audio model
   # does not detect our (German) smoke alarms, so a purpose-built detector reads
   # the node's stream directly instead. See docs/smoke-detection-plan.md.
+
+# Shop-alarm's Home Assistant package values. roles/shop-alarm renders the
+# app's ha/shop_alarm.yaml.j2 with these; the package itself (automations and
+# helpers) stays in github.com/uhlig-it/shop-alarm.
+shop_alarm_ha_critical_notify_service: notify.mobile_app_iphone_15_pro_steffen
+shop_alarm_ha_routine_notify_entity: notify.iphone_15_steffen
+shop_alarm_ha_frigate_url: https://eye.tailnet-204f.ts.net
+# Settings -> Tags. Re-registering a tag in HA assigns a new UUID; update it
+# here and in shop-alarm's docs when the physical tags are replaced.
+shop_alarm_ha_nfc_outside_tag_id: 2e0337f0-75b2-41a6-abe5-282648c8a6aa
+shop_alarm_ha_nfc_inside_tag_id: 14177308-cf20-4d1c-bbab-ffb3e8e98bb0
+
+# ESP32 mic node: its HA package (smoke/fire pushes) is installed by
+# playbooks/services/esp32-mic-node.yml from the app checkout. The critical
+# push uses the companion-app service (bypasses silent/DND).
+esp32_mic_node_ha_notify_service: notify.mobile_app_iphone_15_pro_steffen
+
+# github-heartbeat: its HA package (dependency notifications) is installed by
+# playbooks/services/github-heartbeat.yml from the app checkout.
+github_heartbeat_ha_notify_service: notify.mobile_app_iphone_15_pro_steffen

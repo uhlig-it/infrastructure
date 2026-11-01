@@ -1,0 +1,7 @@
+- name: Home Assistant is restarted
+  community.docker.docker_container:
+    name: homeassistant
+    state: started
+    restart: true
+  become: true
+  tags: [ docker, shop-alarm, ha, service ]

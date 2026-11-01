@@ -11,3 +11,47 @@
   roles:
     - role: shop-alarm
       tags: [ docker, shop-alarm, container ]
+
+# The workshop alarm dashboard is part of the app (it encodes the werkstatt-*
+# metric contract), so it ships in the shop-alarm checkout and is installed
+# here. The generic and machine dashboards stay in roles/victoriametrics.
+- name: Install the workshop alarm dashboard
+  hosts: victoriametrics
+  become: true
+  gather_facts: false
+  vars:
+    shop_alarm_dashboard_src: "{{ app_source }}/monitoring/vmui-werkstatt-dashboard.json"
+    shop_alarm_dashboard_dir: "{{ victoriametrics_dashboards_dir | default('/etc/victoria-metrics/dashboards') }}"
+    shop_alarm_dashboard_dest: "{{ shop_alarm_dashboard_dir }}/werkstatt-dashboard.json"
+  tasks:
+    - name: The app checkout is available for the dashboard
+      ansible.builtin.assert:
+        that: app_source | length > 0
+        fail_msg: >-
+          Pass the shop-alarm checkout as app_source (the deploy workflow does
+          this automatically; locally use -e app_source=/path/to/shop-alarm).
+      tags: [ dashboard ]
+    - name: Dashboard directory exists
+      ansible.builtin.file:
+        path: "{{ shop_alarm_dashboard_dir }}"
+        state: directory
+        owner: root
+        group: root
+        mode: "0755"
+      tags: [ dashboard ]
+    - name: Workshop alarm dashboard is installed
+      ansible.builtin.copy:
+        src: "{{ shop_alarm_dashboard_src }}"
+        dest: "{{ shop_alarm_dashboard_dest }}"
+        owner: root
+        group: root
+        mode: "0644"
+      # -vmui.customDashboardsPath is read at startup.
+      notify: victoria-metrics restarted
+      tags: [ dashboard ]
+  handlers:
+    - name: victoria-metrics restarted
+      ansible.builtin.service:
+        name: victoria-metrics
+        state: restarted
+      tags: [ dashboard, service ]

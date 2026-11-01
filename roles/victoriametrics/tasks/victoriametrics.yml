@@ -66,6 +66,9 @@
     owner: root
     group: root
     mode: "0644"
+  # -vmui.customDashboardsPath is read at startup, so a new or changed
+  # dashboard only appears after a restart.
+  notify: victoria-metrics restarted
   tags: [ configuration, dashboards ]
 
 - name: systemd unit is installed

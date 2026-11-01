@@ -1,0 +1,162 @@
+---
+# The ESP32 mic node (github.com/uhlig-it/esp32-mic-node) ships two things this
+# play deploys: its Home Assistant package (ha/smoke_detection.yaml.j2) and the
+# mic-smoke-test helper (tools/mic-smoke-test.sh). The firmware itself is built
+# and OTA-flashed from the app repo; this play does not touch the node.
+#
+# It also retires the server-side Python detector that ran here as a stepping
+# stone. The node detects on-device now and owns mic/<room>/smoke_alarm; the
+# prototype code and the tuning tool moved to the app repo (prototype/).
+#
+# app_source is passed by the reusable deploy workflow; locally:
+#   ansible-playbook playbooks/services/esp32-mic-node.yml \
+#     -e app_source=/path/to/esp32-mic-node
+- name: Deploy the ESP32 mic-node integration
+  hosts: opus
+  become: true
+  gather_facts: false
+  vars:
+    esp32_mic_node_ha_package_src: "{{ app_source }}/ha/smoke_detection.yaml.j2"
+    esp32_mic_node_ha_package_dest: /opt/homeassistant/packages/smoke_detection.yaml
+    esp32_mic_node_test_conf: /etc/mic-smoke-test.conf
+    esp32_mic_node_mqtt_password: >-
+      {{ (mosquitto_users | selectattr('name', 'equalto', 'mic-detector')
+          | map(attribute='password') | first | default('')) }}
+    # The node streams L16 PCM over RTSP; ffmpeg decodes it for the helper's
+    # capture mode. bullseye is EOL (its security archive's debs are gone), so
+    # ffmpeg is installed as a self-contained static build into /usr/local/bin
+    # rather than via apt.
+    esp32_mic_node_ffmpeg_static_url: https://johnvansickle.com/ffmpeg/releases/ffmpeg-release-amd64-static.tar.xz
+  tasks:
+    - name: The app checkout is available
+      ansible.builtin.assert:
+        that: app_source | length > 0
+        fail_msg: >-
+          Pass the esp32-mic-node checkout as app_source (the deploy workflow
+          does this automatically; locally use
+          -e app_source=/path/to/esp32-mic-node).
+      tags: [ esp32-mic-node, ha, helper, config ]
+    - name: The mic-detector broker user exists in the vault
+      ansible.builtin.assert:
+        that: esp32_mic_node_mqtt_password | length > 0
+        fail_msg: >-
+          Add a 'mic-detector' entry to mosquitto_users (the file the mosquitto
+          role generates the broker password file from).
+      tags: [ esp32-mic-node, helper ]
+
+    # --- retire the server-side prototype service -------------------------
+    - name: Legacy server-side detector service is stopped
+      ansible.builtin.systemd:
+        name: mic-smoke-detector.service
+        state: stopped
+        enabled: false
+      failed_when: false
+      tags: [ esp32-mic-node, retire ]
+    - name: Legacy server-side detector unit is removed
+      ansible.builtin.file:
+        path: /etc/systemd/system/mic-smoke-detector.service
+        state: absent
+      tags: [ esp32-mic-node, retire ]
+    - name: Legacy server-side detector config is removed
+      ansible.builtin.file:
+        path: "{{ item }}"
+        state: absent
+      loop:
+        - /etc/mic-smoke-detector.conf
+        - /etc/mic-smoke-detector-inputs.json
+        - /etc/mic-smoke-detector-profiles.json
+      tags: [ esp32-mic-node, retire ]
+    - name: systemd is reloaded
+      ansible.builtin.systemd:
+        daemon_reload: true
+      tags: [ esp32-mic-node, retire ]
+
+    # --- Home Assistant package -------------------------------------------
+    - name: Home Assistant packages directory exists
+      ansible.builtin.file:
+        path: "{{ esp32_mic_node_ha_package_dest | dirname }}"
+        state: directory
+        owner: suhlig
+        group: suhlig
+      tags: [ esp32-mic-node, ha, config ]
+    - name: Mic-node smoke alarm package is present
+      ansible.builtin.template:
+        src: "{{ esp32_mic_node_ha_package_src }}"
+        dest: "{{ esp32_mic_node_ha_package_dest }}"
+        owner: suhlig
+        group: suhlig
+        mode: "0644"
+        # The package contains Home Assistant's own Jinja; only the [[ ]]
+        # placeholder is rendered by Ansible.
+        variable_start_string: "[["
+        variable_end_string: "]]"
+        block_start_string: "[%"
+        block_end_string: "%]"
+      notify: Home Assistant is restarted
+      tags: [ esp32-mic-node, ha, config ]
+
+    # --- operational helper -----------------------------------------------
+    - name: mic-smoke-test is installed
+      ansible.builtin.copy:
+        src: "{{ app_source }}/tools/mic-smoke-test.sh"
+        dest: /usr/local/bin/mic-smoke-test
+        owner: root
+        group: root
+        mode: "0755"
+      tags: [ esp32-mic-node, helper ]
+    - name: mic-smoke-test credentials are present
+      ansible.builtin.copy:
+        content: |
+          MQTT_HOST=127.0.0.1
+          MQTT_PORT=1883
+          MQTT_USER=mic-detector
+          MQTT_PASS={{ esp32_mic_node_mqtt_password }}
+          MIC_RTSP_USER=frigate
+          MIC_RTSP_PASSWORD={{ vault_mic_rtsp_password }}
+        dest: "{{ esp32_mic_node_test_conf }}"
+        owner: root
+        group: root
+        mode: "0600"
+      no_log: true
+      tags: [ esp32-mic-node, helper ]
+    - name: ffmpeg is present
+      ansible.builtin.stat:
+        path: /usr/local/bin/ffmpeg
+      register: esp32_mic_node_ffmpeg
+      tags: [ esp32-mic-node, helper, ffmpeg ]
+    - name: Static ffmpeg is installed
+      when: not esp32_mic_node_ffmpeg.stat.exists
+      tags: [ esp32-mic-node, helper, ffmpeg ]
+      block:
+        - name: Static ffmpeg archive is downloaded
+          ansible.builtin.get_url:
+            url: "{{ esp32_mic_node_ffmpeg_static_url }}"
+            dest: /tmp/ffmpeg-static.tar.xz
+            mode: "0644"
+        - name: Static ffmpeg archive is unpacked
+          ansible.builtin.unarchive:
+            src: /tmp/ffmpeg-static.tar.xz
+            dest: /tmp/ffmpeg-static
+            remote_src: true
+            creates: /tmp/ffmpeg-static
+        - name: Static ffmpeg binaries are installed
+          ansible.builtin.shell: >-
+            set -euo pipefail;
+            install -m 0755 /tmp/ffmpeg-static/*/ffmpeg /usr/local/bin/ffmpeg;
+            install -m 0755 /tmp/ffmpeg-static/*/ffprobe /usr/local/bin/ffprobe
+          args:
+            creates: /usr/local/bin/ffmpeg
+        - name: Static ffmpeg staging is removed
+          ansible.builtin.file:
+            path: "{{ item }}"
+            state: absent
+          loop:
+            - /tmp/ffmpeg-static
+            - /tmp/ffmpeg-static.tar.xz
+  handlers:
+    - name: Home Assistant is restarted
+      community.docker.docker_container:
+        name: homeassistant
+        state: started
+        restart: true
+      tags: [ esp32-mic-node, ha, service ]

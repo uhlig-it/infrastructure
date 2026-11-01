@@ -14,3 +14,13 @@ alarm_core_health_addr: ":9101"
 alarm_core_frigate_api_url: "http://localhost:5000"
 alarm_core_frigate_api_user: ""
 alarm_core_frigate_api_password: ""
+
+# Home Assistant integration. The app owns its HA package
+# (ha/shop_alarm.yaml.j2); this role renders it into the HA config directory on
+# the host that runs Home Assistant. The config dir must match
+# roles/homeassistant/defaults/main.yml's homeassistant_config_dir. The values
+# below come from inventory/host_vars/opus/main.yml; app_source is passed by
+# the deploy workflow (or -e app_source=... locally).
+shop_alarm_ha_config_dir: /opt/homeassistant
+shop_alarm_ha_package_src: "{{ app_source }}/ha/shop_alarm.yaml.j2"
+shop_alarm_ha_package_dest: "{{ shop_alarm_ha_config_dir }}/packages/shop_alarm.yaml"

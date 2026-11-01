@@ -1,0 +1,128 @@
+{
+  "title": "Shop machine reliability",
+  "rows": [
+    {
+      "title": "At a glance",
+      "panels": [
+        {
+          "title": "Shop reachable (LAN probe)",
+          "description": "**1 = shop answered a ping from pascal within the last minute, 0 = it did not.** The probe writes `shop_health` once per minute with no smoothing, so a single failed ping shows as one minute of 0. Ignore isolated single-point dips; a sustained 0 is an outage. When the line disappears entirely the probe itself (pascal or the node_exporter textfile collector) is down. Metric: `shop_health{mode=\"lan\"}` from `monitor/shop-health.sh`.",
+          "expr": ["shop_health"],
+          "width": 4
+        },
+        {
+          "title": "Node scrape status",
+          "description": "**1 = VictoriaMetrics scrapes the node_exporter successfully.** One line per Pi. `shop:9100` is the shop Pi itself, `pascal:9100` is the witness host that runs the probe. `up=0` for shop means we have no data from the machine at all and must rely on the LAN probe.",
+          "expr": ["up{instance=~\"shop:9100|pascal:9100\"}"],
+          "alias": ["shop node scrape", "pascal node scrape"],
+          "width": 4
+        },
+        {
+          "title": "Probe freshness",
+          "description": "**Seconds since pascal last recorded a probe result.** Normally a sawtooth between 0 and ~60 s. If this keeps growing, the probe pipeline (systemd timer, script, textfile dir on pascal) is broken and `shop_health` can no longer be trusted - `shop_health` would freeze at its last value while the freshness gauge keeps climbing.",
+          "expr": ["time() - shop_health_last_update_seconds"],
+          "unit": "s",
+          "width": 4
+        }
+      ]
+    },
+    {
+      "title": "Incident history (30 days)",
+      "panels": [
+        {
+          "title": "Reachability over 30 days",
+          "description": "Known outages of shop in the last month (UTC): **09-02 14:15 -> 20:00 (5.8 h)**, **09-04 20:50 -> 09-09 13:40 (4.7 d)**, **09-10 22:30 -> 09-18 07:30 (7.4 d)** - root cause analysis in the `shop` repo README. Since the observer roles were deployed on 09-18 you should see this line go solid: the LAN probe (`shop_health`) only exists from 09-18 onward, `up` for `pascal:9100` starts the same day. Any new `0` below the pascal line rules out WiFi/mains as the cause; pascal staying up while shop drops points at shop itself.",
+          "expr": [
+            "up{instance=\"shop:9100\"}",
+            "up{instance=\"pascal:9100\"}",
+            "shop_health"
+          ],
+          "alias": ["shop node scrape", "pascal node scrape", "shop LAN probe"],
+          "width": 12
+        }
+      ]
+    },
+    {
+      "title": "Shop Pi - resources",
+      "panels": [
+        {
+          "title": "Uptime",
+          "description": "How long shop has been up. **A reset of this line is a reboot** - check the journal for the cause. A reboot while the LAN probe stays green is suspicious: the wifi stack recovered by itself (or something rebooted the box).",
+          "expr": ["time() - node_boot_time_seconds{instance=\"shop:9100\"}"],
+          "unit": "s",
+          "width": 4
+        },
+        {
+          "title": "CPU load",
+          "description": "1m and 5m load average. Load > 1 sustained on this Pi means something is grinding; correlates with the camera/mediamtx work.",
+          "expr": [
+            "node_load1{instance=\"shop:9100\"}",
+            "node_load5{instance=\"shop:9100\"}"
+          ],
+          "alias": ["load 1m", "load 5m"],
+          "width": 4
+        },
+        {
+          "title": "Memory available",
+          "description": "Free memory as seen by the kernel. A step towards zero can precede an OOM kill of a service (e.g. the camera pipeline).",
+          "expr": ["node_memory_MemAvailable_bytes{instance=\"shop:9100\"}"],
+          "width": 4
+        },
+        {
+          "title": "Root filesystem free",
+          "description": "Free space on the SD card (`/dev/mmcblk0p2`, `mountpoint=\"/\"`). The 2024 incident was a read-only SD card; a slow grind towards zero is the warning sign. log2ram keeps `/var/log` off the card.",
+          "expr": ["node_filesystem_avail_bytes{instance=\"shop:9100\",mountpoint=\"/\"}"],
+          "width": 6
+        },
+        {
+          "title": "SoC temperature",
+          "description": "CPU thermal zone. The Pi throttles at 80+ C; the watchdog role warns about undervoltage/throttling from `vcgencmd get_throttled` (not yet exported as a metric - see README).",
+          "expr": ["node_hwmon_temp_celsius{instance=\"shop:9100\",sensor=\"temp0\"}"],
+          "unit": "C",
+          "width": 6
+        }
+      ]
+    },
+    {
+      "title": "Witness host - pascal",
+      "panels": [
+        {
+          "title": "Uptime (pascal)",
+          "description": "pascal sits on the same WiFi and mains as shop and runs the LAN probe. **Its uptime is the control variable**: pascal up while shop is down rules out WiFi and mains as the cause of a shop outage (this is what proved the 09-11 incident was shop-internal).",
+          "expr": ["time() - node_boot_time_seconds{instance=\"pascal:9100\"}"],
+          "unit": "s",
+          "width": 6
+        },
+        {
+          "title": "CPU load (pascal)",
+          "description": "pascal is the 3D printer server; typically idle. Spikes here are unrelated to shop but can delay the probe execution.",
+          "expr": [
+            "node_load1{instance=\"pascal:9100\"}",
+            "node_load5{instance=\"pascal:9100\"}"
+          ],
+          "alias": ["load 1m", "load 5m"],
+          "width": 6
+        }
+      ]
+    },
+    {
+      "title": "Power - workshop mains",
+      "panels": [
+        {
+          "title": "Plugs reachable (gosund-0..2)",
+          "description": "Tasmota power plugs on the house LAN (192.168.1.10-.12, same network as shop and pascal). **When the mains cut on 09-17 -> 09-18, these dropped together with both Pis.** They double as a power-loss detector and can later remote-cycle the Pi's PSU.",
+          "expr": ["up{job=\"gosund\",instance!~\"192.168.10.*\"}"],
+          "alias": ["gosund plugs (LAN)"],
+          "width": 6
+        },
+        {
+          "title": "Mains voltage (gosund-0..2)",
+          "description": "Mains voltage measured by the plugs (nominal 230 V). Sagging mains is the suspected root cause of shop's brownout-induced WiFi/SD flakiness (PSU under-voltage, `get_throttled=0x50000` on 09-18). Watch for drops correlated with workshop load.",
+          "expr": ["tasmota_energy_voltage_volts{job=\"gosund\",instance!~\"192.168.10.*\"}"],
+          "unit": "V",
+          "width": 6
+        }
+      ]
+    }
+  ]
+}

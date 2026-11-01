@@ -13,8 +13,8 @@ Everything here assumes the mic-node repo and this repo are checked out on the c
 
 ## Prerequisites (already prepared)
 
-- `opus` runs the detector tooling: static `ffmpeg`/`ffprobe` in `/usr/local/bin`, `mosquitto_sub` on the host, and the credentials in `/etc/mic-smoke-detector.conf` (root-only, `0640`).
-- `mic-smoke-test` is installed on `opus` by `playbooks/services/mic-smoke-detector.yml` (`ansible-playbook playbooks/services/mic-smoke-detector.yml` to refresh). It reads the credentials from that file, so no secret is ever typed or logged.
+- `opus` runs the detector tooling: static `ffmpeg`/`ffprobe` in `/usr/local/bin`, `mosquitto_sub` on the host, and the credentials in `/etc/mic-smoke-test.conf` (root-only, `0600`).
+- `mic-smoke-test` is installed on `opus` by `playbooks/services/esp32-mic-node.yml` (`ansible-playbook playbooks/services/esp32-mic-node.yml -e app_source=/path/to/esp32-mic-node` to refresh, or the app's deploy workflow). It reads the credentials from that file, so no secret is ever typed or logged.
 - The shop node is reachable from `opus` (`nc -z 192.168.1.147 554` and `:80` both succeed).
 
 ## Test A — live verdict (the actual detection test)
@@ -51,10 +51,10 @@ curl -s -u monitor:PASSWORD http://192.168.1.147/metrics | grep -E 'detector|mqt
 ```sh
 ssh opus 'sudo mic-smoke-test capture 192.168.1.147 180 /tmp/shop-det.wav'
 scp opus:/tmp/shop-det.wav /tmp/
-python3 playbooks/services/files/analyze-recording.py /tmp/shop-det.wav --profile smoke_shop_v1
+python3 esp32-mic-node/prototype/analyze-recording.py /tmp/shop-det.wav --profile smoke_shop_v1
 ```
 
-The analyser prints the press regions, the tone peaks, and — with `--profile` — how `smoke_shop_v1` does on this recording: every detection, its peak window on-fraction, and any detection outside a press region (a false positive). If the profile needs adjusting, it also prints a candidate to paste into `mic-smoke-detector-profiles.json` **and** into `src/site.h`'s `DETECTOR_PROFILE` (the firmware is the shipped path).
+The analyser prints the press regions, the tone peaks, and — with `--profile` — how `smoke_shop_v1` does on this recording: every detection, its peak window on-fraction, and any detection outside a press region (a false positive). If the profile needs adjusting, it also prints a candidate to paste into `esp32-mic-node/prototype/mic-smoke-detector-profiles.json` **and** into `src/site.h`'s `DETECTOR_PROFILE` (the firmware is the shipped path).
 
 Note nothing holds the shop node's RTSP slot, so the capture needs no service stop (the "stop the detector first" step in the plan is for the home node, whose slot the service holds).
 
@@ -65,7 +65,7 @@ Note nothing holds the shop node's RTSP slot, so the capture needs no service st
 
 ## Known state / gotchas
 
-- **The home node is currently unreachable from `opus`** (`No route to host` for `192.168.10.40`), so the `mic-smoke-detector` service spins on ffmpeg restarts (`mic_detector_ffmpeg_restarts_total` is huge). That is unrelated to the shop test but pollutes the service log; check it before drawing conclusions from that log.
+- **The old server-side detector is retired** (2026-11-01), so the `opus` service log and its watch on the home node are no longer part of this procedure. The shop node detects on-device and owns `mic/werkstatt/smoke_alarm`; Test B's capture covers the tuning.
 - The `/tmp` scripts on `opus` (`mon-audio.sh`, `mic-smoke.yaml`, `mqtt_probe.py`) are **stale** — they target the retired Frigate `frigate/living_room/audio/*` path, not the detector's `mic/<room>/smoke_alarm`. `mic-smoke-test` replaces them.
-- The server-side detector on `opus` only watches the **home** node; the shop node is not (and need not be) a `detector_input` — the on-device detector owns `mic/werkstatt/smoke_alarm`, and Test B's capture covers the tuning. Adding a shop `detector_input` would be the retired server-side approach, not the shipped one.
+- The server-side detector on `opus` is retired; the on-device detector owns `mic/werkstatt/smoke_alarm`, and Test B's capture covers the tuning.
 - The HA automation `werkstatt_alarm_fire_notify` is suppressed while the `alarm_control_panel.werkstatt` is already `triggered`, so no push there if the shop alarm panel is up.
