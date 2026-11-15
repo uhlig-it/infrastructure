@@ -52,6 +52,9 @@
     - role: uptime-kuma
       become: true
       tags: [docker, uptime-kuma, container]
+    - role: paseo
+      become: true
+      tags: [docker, paseo, container]
     - role: frigate
       become: true
       tags: [frigate]

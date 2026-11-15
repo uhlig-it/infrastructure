@@ -33,6 +33,7 @@ This repo is public, so the workflow can check it out from the calling repo with
 - `playbooks/services/` — application deployments, one file per service.
 - `playbooks/site.yml` — runs everything.
 - `roles/` — host-specific roles that are not shared library.
+- `docs/` — runbooks for individual deployments, for example [`docs/paseo.md`](docs/paseo.md).
 
 ## Usage
 

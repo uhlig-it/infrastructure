@@ -1,0 +1,13 @@
+# Child image of the official Paseo image with the OpenCode CLI added; the base
+# image ships the daemon and the web UI but no agent CLIs.
+# Rendered by roles/paseo and built on the host, not pushed to a registry.
+FROM {{ paseo_base_image }}
+
+# No USER switch: the base entrypoint needs root for first-run volume setup and
+# then drops the daemon and launched agents to the non-root `paseo` user.
+RUN npm install --global opencode-ai@{{ paseo_opencode_version }} \
+ && npm cache clean --force
+
+# Updates come from rebuilding this image, never from the CLI replacing itself
+# mid-run inside a container.
+ENV OPENCODE_DISABLE_AUTOUPDATE=true

@@ -1,0 +1,149 @@
+---
+- name: Secrets are present
+  ansible.builtin.assert:
+    that:
+      - vault_paseo_password is defined
+      - vault_paseo_password | length > 0
+      - vault_opencode_go_api_key is defined
+      - vault_opencode_go_api_key | length > 0
+    fail_msg: >-
+      Add vault_paseo_password and vault_opencode_go_api_key to
+      inventory/group_vars/all/secrets.yml (see secrets.yml.example and
+      docs/paseo.md).
+    quiet: true
+  tags: [ docker, paseo, secret ]
+
+- name: Directories exist
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: directory
+    owner: "{{ paseo_uid }}"
+    group: "{{ paseo_gid }}"
+    mode: "0755"
+  loop:
+    - "{{ paseo_dir }}"
+    - "{{ paseo_home }}"
+    - "{{ paseo_workspace }}"
+  become: true
+  tags: [ docker, paseo, directory ]
+
+# The base image bundles the daemon and the web UI but no agent CLI, so the
+# providers have to come from a child image (paseo.sh/docs/docker).
+- name: Dockerfile is present
+  ansible.builtin.template:
+    src: Dockerfile.j2
+    dest: "{{ paseo_dir }}/Dockerfile"
+    owner: "{{ paseo_uid }}"
+    group: "{{ paseo_gid }}"
+    mode: "0644"
+  become: true
+  tags: [ docker, paseo, image, config ]
+
+- name: Base image is up to date
+  ansible.builtin.command: docker pull {{ paseo_base_image }}
+  register: paseo_base_pull
+  changed_when: "'Status: Downloaded newer image' in paseo_base_pull.stdout"
+  become: true
+  tags: [ docker, paseo, image ]
+
+- name: Base image id is known
+  ansible.builtin.command: docker image inspect {{ paseo_base_image }}
+  register: paseo_base_inspect
+  changed_when: false
+  become: true
+  tags: [ docker, paseo, image ]
+
+# The child image is local, so nothing else moves it forward: rebuild when the
+# upstream image digest or the OpenCode version changes.
+- name: Build stamp is computed
+  ansible.builtin.set_fact:
+    paseo_build_stamp: "{{ (paseo_base_inspect.stdout | from_json)[0].Id }}-opencode-{{ paseo_opencode_version }}"
+  tags: [ docker, paseo, image ]
+
+- name: Current build stamp is read
+  ansible.builtin.slurp:
+    src: "{{ paseo_dir }}/.build-stamp"
+  register: paseo_stamp
+  failed_when: false
+  tags: [ docker, paseo, image ]
+
+- name: Image is built
+  ansible.builtin.command:
+    argv:
+      - docker
+      - build
+      - --tag={{ paseo_image }}:{{ paseo_image_tag }}
+      - "{{ paseo_dir }}"
+  become: true
+  when: >-
+    paseo_stamp.content is not defined
+    or (paseo_stamp.content | b64decode | trim) != paseo_build_stamp
+  tags: [ docker, paseo, image ]
+
+- name: Build stamp is recorded
+  ansible.builtin.copy:
+    content: "{{ paseo_build_stamp }}\n"
+    dest: "{{ paseo_dir }}/.build-stamp"
+    owner: "{{ paseo_uid }}"
+    group: "{{ paseo_gid }}"
+    mode: "0644"
+  become: true
+  when: >-
+    paseo_stamp.content is not defined
+    or (paseo_stamp.content | b64decode | trim) != paseo_build_stamp
+  tags: [ docker, paseo, image ]
+
+# `opencode auth login` is interactive, so the credential the /connect flow
+# would write is rendered here instead: auth.json is what the CLI reads.
+- name: OpenCode data directory exists
+  ansible.builtin.file:
+    path: "{{ paseo_home }}/.local/share/opencode"
+    state: directory
+    owner: "{{ paseo_uid }}"
+    group: "{{ paseo_gid }}"
+    mode: "0700"
+  become: true
+  tags: [ docker, paseo, opencode, directory ]
+
+- name: OpenCode Go credential is present
+  ansible.builtin.template:
+    src: auth.json.j2
+    dest: "{{ paseo_home }}/.local/share/opencode/auth.json"
+    owner: "{{ paseo_uid }}"
+    group: "{{ paseo_gid }}"
+    mode: "0600"
+  become: true
+  no_log: true
+  tags: [ docker, paseo, opencode, secret ]
+
+- name: Paseo is running
+  community.docker.docker_container:
+    name: paseo
+    image: "{{ paseo_image }}:{{ paseo_image_tag }}"
+    state: started
+    restart_policy: always
+    ports:
+      - "{{ paseo_publish }}:{{ paseo_port }}"
+    volumes:
+      - "{{ paseo_home }}:/home/paseo"
+      - "{{ paseo_workspace }}:/workspace"
+    env:
+      TZ: "{{ timezone }}"
+      PASEO_PASSWORD: "{{ vault_paseo_password }}"
+      PASEO_HOSTNAMES: "{{ paseo_hostnames | join(',') if paseo_hostnames else omit }}"
+      PASEO_TRUSTED_PROXIES: "{{ paseo_trusted_proxies if paseo_trusted_proxies else omit }}"
+    labels:
+      # The image is built locally, so Watchtower has nothing to pull.
+      com.centurylinklabs.watchtower.enable: "false"
+  become: true
+  tags: [ docker, paseo, container ]
+
+- name: Paseo answers on loopback
+  ansible.builtin.uri:
+    url: "http://127.0.0.1:{{ paseo_port }}/"
+  register: paseo_http
+  until: paseo_http.status | default(0) == 200
+  retries: 20
+  delay: 3
+  changed_when: false
+  tags: [ docker, paseo, verify ]

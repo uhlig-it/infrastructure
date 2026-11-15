@@ -1,0 +1,38 @@
+---
+# Paseo (daemon + web UI) on Docker, with the OpenCode CLI added by a child
+# image. See https://paseo.sh/docs/docker and docs/paseo.md.
+paseo_image: paseo-opencode
+paseo_image_tag: local
+paseo_base_image: ghcr.io/getpaseo/paseo:latest
+
+# Pinned rather than "latest": an unpinned install would stay at whatever
+# version the first build resolved, because Docker caches the npm layer. Bump
+# to update the agent CLI, then re-run the playbook.
+paseo_opencode_version: "1.19.5"
+
+paseo_dir: /opt/paseo
+# uid/gid of the image's non-root `paseo` user. The host user is 1000 as well,
+# but the container's numeric owner is what matters for the mounted directories.
+paseo_uid: 1000
+paseo_gid: 1000
+
+# Host directories mounted as /home/paseo (daemon state, agent credentials) and
+# /workspace (what launched agents may read and write).
+paseo_home: "{{ paseo_dir }}/home"
+paseo_workspace: "{{ paseo_dir }}/workspace"
+
+paseo_port: 6767
+# Loopback only: the Tailscale Service declared in host_vars terminates TLS and
+# proxies to this port, so tailnet clients use https://<service>.ts.net.
+paseo_publish: "127.0.0.1:{{ paseo_port }}"
+
+# Extra DNS names the daemon accepts (PASEO_HOSTNAMES). IPs and localhost are
+# allowed without being listed, and anything else gets a 403 Host not allowed.
+paseo_hostnames: []
+
+# Proxies whose X-Forwarded-* headers the daemon trusts. Tailscale serve is the
+# only listener in front of the published port, but it reaches the container
+# from the Docker bridge gateway rather than from loopback, so that range has to
+# be trusted for the web app to select wss:// over ws://.
+# https://paseo.sh/docs/web-ui#https-and-tls
+paseo_trusted_proxies: "loopback,172.16.0.0/12"

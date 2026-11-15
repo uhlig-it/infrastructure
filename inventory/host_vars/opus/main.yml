@@ -15,6 +15,15 @@ tailscale_services:
   - name: svc:status
     port: 443
     backend: http://localhost:3001
+  - name: svc:paseo
+    port: 443
+    backend: http://127.0.0.1:6767
+
+# Paseo's daemon rejects a Host header it has not been told about. The Tailscale
+# Service (svc:paseo above) proxies from paseo.tailnet-204f.ts.net; IPs and
+# localhost are always accepted. See roles/paseo and docs/paseo.md.
+paseo_hostnames:
+  - paseo.tailnet-204f.ts.net
 
 # Frigate: camera sources and the (non-secret) audio wiring live here in
 # plaintext; only the MQTT password and the node's RTSP/HTTP passwords are vaulted.
