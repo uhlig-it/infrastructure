@@ -1,5 +1,5 @@
-# Child image of the official Paseo image with the OpenCode CLI added; the base
-# image ships the daemon and the web UI but no agent CLIs.
+# Child image of the official Paseo image with the OpenCode and GitHub CLIs
+# added; the base image ships the daemon and the web UI but no agent CLIs.
 # Rendered by roles/paseo and built on the host, not pushed to a registry.
 FROM {{ paseo_base_image }}
 
@@ -7,6 +7,27 @@ FROM {{ paseo_base_image }}
 # then drops the daemon and launched agents to the non-root `paseo` user.
 RUN npm install --global opencode-ai@{{ paseo_opencode_version }} \
  && npm cache clean --force
+
+# `gh` supplies `gh auth git-credential` (the HTTPS helper ~/.gitconfig names)
+# and `gh pr`/`gh api` for agents. The upstream tarball beats adding cli/cli's
+# apt repository: the base is node:22-bookworm-slim, which already carries curl
+# and ca-certificates, so this needs no extra packages. The digest pins the
+# download; `gh --version` fails the build if the extraction is wrong.
+# TARGETARCH comes from BuildKit; the default keeps a non-BuildKit build going.
+ARG TARGETARCH
+RUN set -eu; \
+    arch="${TARGETARCH:-amd64}"; \
+    case "$arch" in \
+      amd64) sha256=98cb101ad87dbbd3f6b2f2bfcbd43197ccd07643140121d8a9cfaa91eadbc24e ;; \
+      arm64) sha256=cb34cefc6f4e77b90731374a2b737516bb8f3033c6ca46aa949e5344f68069e3 ;; \
+      *) echo "unsupported TARGETARCH=$arch" >&2; exit 1 ;; \
+    esac; \
+    url="https://github.com/cli/cli/releases/download/v{{ paseo_gh_version }}/gh_{{ paseo_gh_version }}_linux_$arch.tar.gz"; \
+    curl -fsSL "$url" -o /tmp/gh.tar.gz; \
+    echo "$sha256  /tmp/gh.tar.gz" | sha256sum -c -; \
+    tar -xzf /tmp/gh.tar.gz -C /usr/local --strip-components=1; \
+    rm /tmp/gh.tar.gz; \
+    gh --version
 
 # Updates come from rebuilding this image, never from the CLI replacing itself
 # mid-run inside a container.

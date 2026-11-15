@@ -1,0 +1,15 @@
+# Rendered by roles/paseo into /opt/paseo/home/.config/gh/hosts.yml, which the
+# container mounts as ~/.config/gh/hosts.yml (XDG_CONFIG_HOME is /home/paseo/.config).
+# This is the same shape `gh auth login --with-token` writes; `users:` carries
+# the per-account token, `oauth_token:` the active one, so keep them in sync.
+#
+# The key is the account the token belongs to — `gh` reports it as the
+# authenticated user, and it is what API calls act as. It is unrelated to the
+# commit identity in .gitconfig.
+github.com:
+    git_protocol: https
+    oauth_token: "{{ vault_paseo_github_token }}"
+    user: {{ paseo_github_user }}
+    users:
+        {{ paseo_github_user }}:
+            oauth_token: "{{ vault_paseo_github_token }}"

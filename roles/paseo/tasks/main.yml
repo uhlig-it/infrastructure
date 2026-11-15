@@ -6,10 +6,12 @@
       - vault_paseo_password | length > 0
       - vault_opencode_go_api_key is defined
       - vault_opencode_go_api_key | length > 0
+      - vault_paseo_github_token is defined
+      - vault_paseo_github_token | length > 0
     fail_msg: >-
-      Add vault_paseo_password and vault_opencode_go_api_key to
-      inventory/group_vars/all/secrets.yml (see secrets.yml.example and
-      docs/paseo.md).
+      Add vault_paseo_password, vault_opencode_go_api_key and
+      vault_paseo_github_token to inventory/group_vars/all/secrets.yml (see
+      secrets.yml.example and docs/paseo.md).
     quiet: true
   tags: [ docker, paseo, secret ]
 
@@ -54,10 +56,10 @@
   tags: [ docker, paseo, image ]
 
 # The child image is local, so nothing else moves it forward: rebuild when the
-# upstream image digest or the OpenCode version changes.
+# upstream image digest or a pinned CLI version changes.
 - name: Build stamp is computed
   ansible.builtin.set_fact:
-    paseo_build_stamp: "{{ (paseo_base_inspect.stdout | from_json)[0].Id }}-opencode-{{ paseo_opencode_version }}"
+    paseo_build_stamp: "{{ (paseo_base_inspect.stdout | from_json)[0].Id }}-opencode-{{ paseo_opencode_version }}-gh-{{ paseo_gh_version }}"
   tags: [ docker, paseo, image ]
 
 - name: Current build stamp is read
@@ -116,6 +118,41 @@
   no_log: true
   tags: [ docker, paseo, opencode, secret ]
 
+# Agents push over HTTPS, so the credential lives where `gh` expects it and the
+# helper in .gitconfig reads it from there. Both files sit in the mounted home,
+# so they survive a container rebuild. Neither is passed as an environment
+# variable, so the token does not appear in `docker inspect`.
+- name: gh configuration directory exists
+  ansible.builtin.file:
+    path: "{{ paseo_home }}/.config/gh"
+    state: directory
+    owner: "{{ paseo_uid }}"
+    group: "{{ paseo_gid }}"
+    mode: "0700"
+  become: true
+  tags: [ docker, paseo, git, directory ]
+
+- name: Git identity is present
+  ansible.builtin.template:
+    src: gitconfig.j2
+    dest: "{{ paseo_home }}/.gitconfig"
+    owner: "{{ paseo_uid }}"
+    group: "{{ paseo_gid }}"
+    mode: "0644"
+  become: true
+  tags: [ docker, paseo, git, config ]
+
+- name: GitHub credential is present
+  ansible.builtin.template:
+    src: gh-hosts.yml.j2
+    dest: "{{ paseo_home }}/.config/gh/hosts.yml"
+    owner: "{{ paseo_uid }}"
+    group: "{{ paseo_gid }}"
+    mode: "0600"
+  become: true
+  no_log: true
+  tags: [ docker, paseo, git, secret ]
+
 - name: Paseo is running
   community.docker.docker_container:
     name: paseo
@@ -146,4 +183,24 @@
   retries: 20
   delay: 3
   changed_when: false
+  tags: [ docker, paseo, verify ]
+
+# Both checks are local: `gh auth token` reads hosts.yml and does not call the
+# API, and `git config` reads .gitconfig. A wrong hosts.yml shape fails here
+# rather than in an agent's push twenty minutes later.
+- name: GitHub credential is readable by the container user
+  ansible.builtin.command:
+    argv: [ docker, exec, --user, paseo, paseo, gh, auth, token ]
+  register: paseo_gh_token
+  changed_when: false
+  no_log: true
+  failed_when: (paseo_gh_token.rc != 0) or (paseo_gh_token.stdout | trim | length == 0)
+  tags: [ docker, paseo, verify ]
+
+- name: Commits are authored as the configured identity
+  ansible.builtin.command:
+    argv: [ docker, exec, --user, paseo, paseo, git, config, --global, --get, user.email ]
+  register: paseo_git_email
+  changed_when: false
+  failed_when: (paseo_git_email.stdout | trim) != paseo_git_user_email
   tags: [ docker, paseo, verify ]

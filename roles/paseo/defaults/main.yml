@@ -10,6 +10,20 @@ paseo_base_image: ghcr.io/getpaseo/paseo:latest
 # to update the agent CLI, then re-run the playbook.
 paseo_opencode_version: "1.19.5"
 
+# GitHub CLI. Pinned for the same reason as OpenCode: it is baked into the
+# image, and only the build stamp below decides whether to rebuild.
+paseo_gh_version: "2.104.0"
+
+# Every commit made by an agent is authored as this identity. It is independent
+# of the credential that authorizes the push: GitHub links the commit to the
+# account owning the email, so the history reads as human work.
+paseo_git_user_name: Steffen Uhlig
+paseo_git_user_email: steffen@familie-uhlig.net
+
+# The account `vault_paseo_github_token` belongs to; rendered as the `user:`
+# key in gh's hosts.yml. Not the commit identity above.
+paseo_github_user: suhlig
+
 paseo_dir: /opt/paseo
 # uid/gid of the image's non-root `paseo` user. The host user is 1000 as well,
 # but the container's numeric owner is what matters for the mounted directories.

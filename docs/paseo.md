@@ -1,6 +1,6 @@
 # Paseo on opus
 
-Paseo's official Docker image runs the daemon and serves the bundled web UI from one origin. It bundles no agent CLIs, so `roles/paseo` builds a child image (`paseo-opencode:local`) that adds the OpenCode CLI. Everything runs on `opus` as the container's non-root `paseo` user (uid/gid 1000, which is also `suhlig` on the host).
+Paseo's official Docker image runs the daemon and serves the bundled web UI from one origin. It bundles no agent CLIs, so `roles/paseo` builds a child image (`paseo-opencode:local`) that adds the OpenCode and GitHub CLIs. Everything runs on `opus` as the container's non-root `paseo` user (uid/gid 1000, which is also `suhlig` on the host).
 
 Reach it at **https://paseo.tailnet-204f.ts.net**, published as the Tailscale Service `svc:paseo` from `inventory/host_vars/opus/main.yml`. The container publishes its port on loopback only (`127.0.0.1:6767`), so the LAN and the tailnet reach Paseo exclusively through that TLS endpoint.
 
@@ -8,10 +8,10 @@ Reach it at **https://paseo.tailnet-204f.ts.net**, published as the Tailscale Se
 
 | Path | Mounted as | Contents |
 | --- | --- | --- |
-| `/opt/paseo/home` | `/home/paseo` | Daemon state (`~/.paseo`), OpenCode credential, future agent credentials (`.claude`, `.codex`, …) |
+| `/opt/paseo/home` | `/home/paseo` | Daemon state (`~/.paseo`), OpenCode credential, git identity (`.gitconfig`), GitHub credential (`.config/gh/hosts.yml`), future agent credentials (`.claude`, `.codex`, …) |
 | `/opt/paseo/workspace` | `/workspace` | What launched agents may read and write; Paseo creates worktrees here |
 | `/opt/paseo/Dockerfile` | — | Rendered from `roles/paseo/templates/Dockerfile.j2` |
-| `/opt/paseo/.build-stamp` | — | Base image id + OpenCode version of the built child image |
+| `/opt/paseo/.build-stamp` | — | Base image id + OpenCode and `gh` versions of the built child image |
 
 ## The tailnet endpoint
 
@@ -90,18 +90,45 @@ $ docker exec --user paseo --workdir /tmp paseo opencode run -m opencode-go/deep
 
 Rotate it by updating the vault entry and re-running the playbook.
 
+## Git and GitHub access
+
+Agents commit and push from inside the container through two independent pieces, deliberately kept apart:
+
+- **Commit identity** comes from `/opt/paseo/home/.gitconfig`, rendered by the role. Every commit is authored as `Steffen Uhlig <steffen@familie-uhlig.net>`; GitHub links it to that account by email, so the history reads as your work rather than a bot's.
+- **Push authorization** comes from `vault_paseo_github_token`, a classic PAT owned by `suhlig` with `repo` scope. `roles/paseo` renders it into `/opt/paseo/home/.config/gh/hosts.yml` (mode `0600`), the file `gh auth login --with-token` would have written, and `.gitconfig` names `gh auth git-credential` as the HTTPS helper. The token is therefore usable both by `git push` and by `gh pr create`.
+
+Classic rather than fine-grained: a fine-grained PAT is scoped to exactly one resource owner, and agents push to both `suhlig` and `uhlig-it`. One classic PAT covers both owners, at the cost of reaching every repository you can push to. Create it once under GitHub → Settings → Developer settings → Personal access tokens (classic), with the `repo` scope. Reusing `github.access_token` would also have worked, but it is the OAuth token CI relies on — sharing it with an agent container means one credential with two blast radii and no way to rotate either alone. The dedicated token is revocable on its own.
+
+The token is a file in the mounted home, never an environment variable, so it does not show up in `docker inspect` — the same rule the OpenCode key follows. It is also not in the B2 backups: only `/opt/homeassistant` is backed up on this host.
+
+Remotes must be HTTPS. The container holds no GitHub SSH key and no `known_hosts` entry, so a `git@github.com:owner/repo.git` remote cannot push. `gh repo clone` and `gh pr checkout` already use HTTPS, because `hosts.yml` sets `git_protocol: https`.
+
+Verify from the host:
+
+```command
+$ docker exec --user paseo paseo gh auth status
+$ docker exec --user paseo paseo git config --global --get user.email   # steffen@familie-uhlig.net
+```
+
+If agents are to edit `.github/workflows`, add the `workflow` scope to the token as well. Without it GitHub rejects those pushes with a 403 that does not mention the scope.
+
+Rotate by updating `vault_paseo_github_token` and re-running `ansible-playbook playbooks/machines/opus.yml --tags paseo`. The credential file is rewritten in place on the host, so the daemon needs no restart and the next `gh` or `git` invocation reads the new token. Commits already pushed keep their authorship — only the push credential changes.
+
+A fine-grained alternative exists but needs two tokens (one per owner) and a per-owner `credential.helper`, because `gh` stores a single token per host. That is the tradeoff the classic PAT buys you out of.
+
 ## Updates
 
-`ghcr.io/getpaseo/paseo:latest` follows stable Paseo releases. Watchtower is disabled for this container (the image is built locally, so there is nothing to pull), and the child image is rebuilt only when the upstream digest or `paseo_opencode_version` changes:
+`ghcr.io/getpaseo/paseo:latest` follows stable Paseo releases. Watchtower is disabled for this container (the image is built locally, so there is nothing to pull), and the child image is rebuilt only when the upstream digest, `paseo_opencode_version` or `paseo_gh_version` changes:
 
 ```command
 $ ansible-playbook playbooks/machines/opus.yml --tags paseo
 ```
 
-That pull-and-rebuild step runs on every deploy, so a new upstream image lands with the next playbook run. To move the agent CLI, change the pinned default in `roles/paseo/defaults/main.yml` — the OpenCode version is part of the build stamp, which is what makes a rebuild happen:
+That pull-and-rebuild step runs on every deploy, so a new upstream image lands with the next playbook run. To move an agent CLI, change the pinned defaults in `roles/paseo/defaults/main.yml` — the OpenCode and `gh` versions are part of the build stamp, which is what makes a rebuild happen:
 
 ```command
 $ ansible-playbook playbooks/machines/opus.yml --tags paseo -e paseo_opencode_version=1.20.0
+$ ansible-playbook playbooks/machines/opus.yml --tags paseo -e paseo_gh_version=2.105.0
 ```
 
 ## Deploying
@@ -111,11 +138,10 @@ $ ansible-playbook playbooks/machines/opus.yml --tags paseo
 $ ansible-playbook playbooks/fleet/tailscale.yml --limit opus --tags tailscale,service   # publish svc:paseo
 ```
 
-The role asserts that both secrets exist before it touches anything, and it waits for the web UI to answer on loopback, so a failed deploy does not leave a silently broken container. Re-runs are idempotent when nothing upstream changed.
+The role asserts that all three secrets exist before it touches anything, and it waits for the web UI to answer on loopback, so a failed deploy does not leave a silently broken container. Re-runs are idempotent when nothing upstream changed.
 
 ## Not set up yet
 
 - `/opt/paseo/workspace` starts empty. Add projects in the app, or clone repos into it on the host.
-- Agents have no git identity or GitHub credentials yet. Add a `~/.gitconfig` and an SSH key or `gh` login under `/opt/paseo/home` when the first agent needs to push.
 - Paseo shares an 8 GB host with Home Assistant and Frigate. Frigate is the memory and CPU hog; check `docker stats` before running many agents in parallel.
 - Nothing rotates `daemon.log`; if it grows, drop `PASEO_LOG_LEVEL` from `info` to `warn` in the role's container env.
