@@ -1,0 +1,42 @@
+name: Build github-heartbeat image
+
+# Fallback publisher for ghcr.io/uhlig-it/github-heartbeat. The package is
+# linked to this repository, so a GITHUB_TOKEN here can push it even though the
+# application repository's tag build is denied. Prefer the application's own
+# workflow once the package grants uhlig-it/github-heartbeat write access.
+on:
+  workflow_dispatch:
+    inputs:
+      ref:
+        description: Ref in uhlig-it/github-heartbeat to build
+        required: true
+        default: main
+      tag:
+        description: Image tag to publish (e.g. v0.1.2)
+        required: true
+
+permissions:
+  contents: read
+  packages: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      with:
+        repository: uhlig-it/github-heartbeat
+        ref: ${{ inputs.ref }}
+    - uses: docker/setup-qemu-action@v3
+    - uses: docker/setup-buildx-action@v3
+    - uses: docker/login-action@v3
+      with:
+        registry: ghcr.io
+        username: ${{ github.actor }}
+        password: ${{ secrets.GITHUB_TOKEN }}
+    - uses: docker/build-push-action@v6
+      with:
+        context: .
+        platforms: linux/amd64,linux/arm64
+        push: true
+        tags: ghcr.io/uhlig-it/github-heartbeat:${{ inputs.tag }}
