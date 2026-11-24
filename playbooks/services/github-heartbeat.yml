@@ -33,7 +33,7 @@
   become: true
   gather_facts: false
   vars:
-    github_heartbeat_image: ghcr.io/uhlig-it/github-heartbeat:v0.1.1
+    github_heartbeat_image: ghcr.io/uhlig-it/github-heartbeat:v0.1.2
     github_heartbeat_repos:
       - suhlig/rostfacto
       - suhlig/rustomato
