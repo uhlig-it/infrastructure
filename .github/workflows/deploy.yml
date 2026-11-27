@@ -66,7 +66,8 @@ jobs:
       - name: Install Ansible
         run: |
           python3 -m venv /tmp/ansible
-          /tmp/ansible/bin/pip install ansible-core
+          # 2.22.0 hangs in ansible-galaxy; 2.21.6 is the last known-good.
+          /tmp/ansible/bin/pip install ansible-core==2.21.6
       - name: Install collections and roles
         working-directory: infrastructure
         run: |
