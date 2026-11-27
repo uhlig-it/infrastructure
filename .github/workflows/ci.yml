@@ -23,10 +23,10 @@ jobs:
         run: |
           set -euo pipefail
           install() {
-            timeout 240 /tmp/ansible/bin/ansible-galaxy collection install -r requirements.yml
-            timeout 240 /tmp/ansible/bin/ansible-galaxy role install -r requirements.yml
+            timeout 600 /tmp/ansible/bin/ansible-galaxy collection install -r requirements.yml || return 1
+            timeout 600 /tmp/ansible/bin/ansible-galaxy role install -r requirements.yml || return 1
           }
-          for attempt in 1 2 3; do
+          for attempt in 1 2; do
             echo "Attempt $attempt"
             if install; then
               exit 0
