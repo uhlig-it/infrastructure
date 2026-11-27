@@ -17,9 +17,24 @@ jobs:
           python3 -m venv /tmp/ansible
           /tmp/ansible/bin/pip install ansible-core
       - name: Install collections and roles
+        env:
+          # Never wait for a credential prompt in CI.
+          GIT_TERMINAL_PROMPT: "0"
         run: |
-          /tmp/ansible/bin/ansible-galaxy collection install -r requirements.yml
-          /tmp/ansible/bin/ansible-galaxy role install -r requirements.yml
+          set -euo pipefail
+          install() {
+            timeout 240 /tmp/ansible/bin/ansible-galaxy collection install -r requirements.yml
+            timeout 240 /tmp/ansible/bin/ansible-galaxy role install -r requirements.yml
+          }
+          for attempt in 1 2 3; do
+            echo "Attempt $attempt"
+            if install; then
+              exit 0
+            fi
+            echo "galaxy install failed; retrying" >&2
+            sleep 15
+          done
+          exit 1
       - name: Syntax check every playbook
         # site.yml is a pure import list; playbooks/services/files/ holds
         # config files, not playbooks.
